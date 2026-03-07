@@ -69,6 +69,10 @@ const CalendarView = () => {
     return <p>{error}</p>;
   }
 
+  if (events.length === 0) {
+    return <p>No meetings, calls, or tasks were found in HubSpot for this account.</p>;
+  }
+
   return (
     <FullCalendar
       plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}

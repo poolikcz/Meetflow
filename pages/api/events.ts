@@ -3,6 +3,21 @@ import { getAuthContext, getOAuthSettings, refreshAccessToken, setAuthCookies } 
 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
 
+const OBJECT_CONFIG: Record<string, { properties: string[]; scopeHint: string }> = {
+  meetings: {
+    properties: ['hs_timestamp', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_title', 'hs_meeting_body'],
+    scopeHint: 'crm.objects.meetings.read',
+  },
+  calls: {
+    properties: ['hs_timestamp', 'hs_call_title', 'hs_call_body'],
+    scopeHint: 'crm.objects.calls.read',
+  },
+  tasks: {
+    properties: ['hs_timestamp', 'hs_task_subject', 'hs_task_body'],
+    scopeHint: 'crm.objects.tasks.read',
+  },
+};
+
 class HubSpotApiError extends Error {
   status: number;
 
@@ -19,17 +34,66 @@ async function fetchObjects(path: string, token: string) {
       'Content-Type': 'application/json',
     },
   });
+  const payload = await resp.json().catch(() => null);
+
   if (!resp.ok) {
-    throw new HubSpotApiError(resp.status, `HubSpot API returned ${resp.status}`);
+    const detail = payload && typeof payload.message === 'string' ? payload.message : undefined;
+    const errorText = detail
+      ? `HubSpot API returned ${resp.status}: ${detail}`
+      : `HubSpot API returned ${resp.status}`;
+    throw new HubSpotApiError(resp.status, errorText);
   }
-  return resp.json();
+
+  return payload;
+}
+
+function parseHubSpotDate(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const asDate = new Date(value);
+    return Number.isNaN(asDate.getTime()) ? undefined : asDate.toISOString();
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = Number(trimmed);
+      if (Number.isFinite(asNumber)) {
+        const asDate = new Date(asNumber);
+        if (!Number.isNaN(asDate.getTime())) {
+          return asDate.toISOString();
+        }
+      }
+    }
+
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return undefined;
 }
 
 function toCalendarEvents(results: any[], type: string, portalId?: string) {
-  return results.map((item) => {
+  return results
+    .map((item) => {
     const props = item.properties || {};
-    const start = props.startTime || props.dueDate || props.timestamp;
-    const title = props.subject || props.summary || type;
+    const start = parseHubSpotDate(
+      props.hs_timestamp || props.hs_meeting_start_time || props.createdate
+    );
+
+    const title =
+      props.hs_meeting_title ||
+      props.hs_call_title ||
+      props.hs_task_subject ||
+      props.subject ||
+      props.summary ||
+      type;
+
     const url = portalId
       ? `https://app.hubspot.com/contacts/${portalId}/record/${type}/${item.id}`
       : undefined;
@@ -47,8 +111,14 @@ function toCalendarEvents(results: any[], type: string, portalId?: string) {
       default:
         color = '';
     }
+
+    if (!start) {
+      return null;
+    }
+
     return { id: item.id, title, start, url, color, extendedProps: item };
-  });
+  })
+    .filter(Boolean);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -69,9 +139,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const types = type === 'all' ? ['meetings', 'calls', 'tasks'] : [type.toString()];
     const allEvents: any[] = [];
+    const warnings: string[] = [];
 
     for (const t of types) {
-      const path = `/crm/v3/objects/${t}?archived=false&limit=100`;
+      const config = OBJECT_CONFIG[t] || { properties: [], scopeHint: '' };
+      const params = new URLSearchParams({
+        archived: 'false',
+        limit: '100',
+      });
+      if (config.properties.length) {
+        params.set('properties', config.properties.join(','));
+      }
+      const path = `/crm/v3/objects/${t}?${params.toString()}`;
       let data: any;
 
       try {
@@ -90,6 +169,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             portal = String(refreshed.hub_id);
           }
           data = await fetchObjects(path, token);
+        } else if (err instanceof HubSpotApiError && err.status === 403) {
+          const scopeHint = config.scopeHint ? ` (${config.scopeHint})` : '';
+          warnings.push(`No permission for ${t}${scopeHint}`);
+          continue;
         } else {
           throw err;
         }
@@ -98,6 +181,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (data.results) {
         allEvents.push(...toCalendarEvents(data.results, t, portal));
       }
+    }
+
+    if (!allEvents.length && warnings.length) {
+      res.status(403).json({
+        error: `Missing scopes for activities: ${warnings.join(', ')}`,
+        authUrl: '/api/oauth/start',
+      });
+      return;
     }
 
     res.status(200).json(allEvents);
