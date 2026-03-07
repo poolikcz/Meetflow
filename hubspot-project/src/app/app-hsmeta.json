@@ -1,0 +1,34 @@
+{
+  "uid": "meetflow_app",
+  "type": "app",
+  "config": {
+    "description": "Calendar integration for HubSpot activities.",
+    "name": "Meetflow",
+    "distribution": "marketplace",
+    "auth": {
+      "type": "oauth",
+      "redirectUrls": [
+        "https://meetflow-woad.vercel.app/api/oauth/callback",
+        "http://localhost:3000/api/oauth/callback"
+      ],
+      "requiredScopes": [
+        "oauth",
+        "crm.objects.contacts.read"
+      ],
+      "optionalScopes": [],
+      "conditionallyRequiredScopes": []
+    },
+    "permittedUrls": {
+      "fetch": [
+        "https://api.hubapi.com"
+      ],
+      "iframe": [],
+      "img": []
+    },
+    "support": {
+      "supportEmail": "support@meetflow.app",
+      "documentationUrl": "https://meetflow-woad.vercel.app",
+      "supportUrl": "https://meetflow-woad.vercel.app"
+    }
+  }
+}

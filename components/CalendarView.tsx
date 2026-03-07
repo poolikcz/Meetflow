@@ -17,20 +17,56 @@ interface CalendarEvent {
 const CalendarView = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch('/api/events?type=all')
-      .then((r) => r.json())
-      .then((data) => {
-        setEvents(data);
+    async function loadEvents() {
+      setLoading(true);
+      setError(null);
+      setAuthUrl(null);
+
+      try {
+        const response = await fetch('/api/events?type=all');
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 401 && data?.authUrl) {
+            setAuthUrl(data.authUrl);
+            setEvents([]);
+            return;
+          }
+
+          setError(data?.error || 'Failed to load events');
+          setEvents([]);
+          return;
+        }
+
+        setEvents(Array.isArray(data) ? data : []);
+      } catch {
+        setError('Failed to load events');
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    }
+
+    loadEvents();
   }, []);
 
   if (loading) {
     return <p>Loading…</p>;
+  }
+
+  if (authUrl) {
+    return (
+      <p>
+        HubSpot account is not connected. <a href={authUrl}>Connect HubSpot</a>
+      </p>
+    );
+  }
+
+  if (error) {
+    return <p>{error}</p>;
   }
 
   return (

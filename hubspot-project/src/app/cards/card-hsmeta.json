@@ -1,0 +1,12 @@
+{
+  "uid": "meetflow_card",
+  "type": "card",
+  "config": {
+    "name": "Meetflow Calendar",
+    "location": "crm.record.tab",
+    "entrypoint": "/app/cards/NewCard.tsx",
+    "objectTypes": [
+      "contacts"
+    ]
+  }
+}

@@ -1,6 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getAuthContext, getOAuthSettings, refreshAccessToken, setAuthCookies } from '../../lib/hubspotAuth';
 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
+
+class HubSpotApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function fetchObjects(path: string, token: string) {
   const resp = await fetch(`${HUBSPOT_BASE}${path}`, {
@@ -10,17 +20,19 @@ async function fetchObjects(path: string, token: string) {
     },
   });
   if (!resp.ok) {
-    throw new Error(`HubSpot API returned ${resp.status}`);
+    throw new HubSpotApiError(resp.status, `HubSpot API returned ${resp.status}`);
   }
   return resp.json();
 }
 
-function toCalendarEvents(results: any[], type: string, portalId: string) {
+function toCalendarEvents(results: any[], type: string, portalId?: string) {
   return results.map((item) => {
     const props = item.properties || {};
     const start = props.startTime || props.dueDate || props.timestamp;
     const title = props.subject || props.summary || type;
-    const url = `https://app.hubspot.com/contacts/${portalId}/record/${type}/${item.id}`;
+    const url = portalId
+      ? `https://app.hubspot.com/contacts/${portalId}/record/${type}/${item.id}`
+      : undefined;
     let color;
     switch (type) {
       case 'meetings':
@@ -41,27 +53,65 @@ function toCalendarEvents(results: any[], type: string, portalId: string) {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { type = 'all' } = req.query;
-  const token = process.env.HUBSPOT_TOKEN;
-  const portal = process.env.HUBSPOT_PORTAL_ID;
-  if (!token || !portal) {
-    res.status(500).json({ error: 'Missing HUBSPOT_TOKEN or HUBSPOT_PORTAL_ID' });
+  const auth = getAuthContext(req);
+
+  let token = auth.accessToken || process.env.HUBSPOT_TOKEN;
+  let portal = auth.portalId || process.env.HUBSPOT_PORTAL_ID;
+
+  if (!token) {
+    res.status(401).json({
+      error: 'HubSpot account is not connected',
+      authUrl: '/api/oauth/start',
+    });
     return;
   }
 
   try {
     const types = type === 'all' ? ['meetings', 'calls', 'tasks'] : [type.toString()];
     const allEvents: any[] = [];
+
     for (const t of types) {
-      let path = `/crm/v3/objects/${t}?archived=false&limit=100`;
-      // optionally add property filters / date range
-      const data: any = await fetchObjects(path, token);
+      const path = `/crm/v3/objects/${t}?archived=false&limit=100`;
+      let data: any;
+
+      try {
+        data = await fetchObjects(path, token);
+      } catch (err) {
+        if (
+          err instanceof HubSpotApiError &&
+          err.status === 401 &&
+          auth.refreshToken
+        ) {
+          const settings = getOAuthSettings(req);
+          const refreshed = await refreshAccessToken(auth.refreshToken, settings);
+          setAuthCookies(res, refreshed);
+          token = refreshed.access_token;
+          if (refreshed.hub_id) {
+            portal = String(refreshed.hub_id);
+          }
+          data = await fetchObjects(path, token);
+        } else {
+          throw err;
+        }
+      }
+
       if (data.results) {
         allEvents.push(...toCalendarEvents(data.results, t, portal));
       }
     }
+
     res.status(200).json(allEvents);
   } catch (err) {
     console.error(err);
+
+    if (err instanceof HubSpotApiError && err.status === 401) {
+      res.status(401).json({
+        error: 'HubSpot authorization expired',
+        authUrl: '/api/oauth/start',
+      });
+      return;
+    }
+
     res.status(500).json({ error: 'Failed to fetch from HubSpot' });
   }
 }
