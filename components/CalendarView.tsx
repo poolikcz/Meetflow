@@ -77,7 +77,7 @@ const CalendarView = () => {
   return (
     <FullCalendar
       plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-      initialView="timeGridWeek"
+      initialView="dayGridMonth"
       events={events}
       headerToolbar={{
         left: 'prev,next today',
