@@ -31,8 +31,9 @@ const CalendarView = () => {
         const data = await response.json();
 
         if (!response.ok) {
-          if (response.status === 401 && data?.authUrl) {
+          if (data?.authUrl) {
             setAuthUrl(data.authUrl);
+            setError(data?.error || null);
             setEvents([]);
             return;
           }
@@ -60,7 +61,7 @@ const CalendarView = () => {
   if (authUrl) {
     return (
       <p>
-        HubSpot account is not connected. <a href={authUrl}>Connect HubSpot</a>
+        {error || 'HubSpot account is not connected.'} <a href={authUrl}>Reconnect HubSpot</a>
       </p>
     );
   }
