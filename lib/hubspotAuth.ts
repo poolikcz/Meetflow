@@ -110,9 +110,10 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || getRequestBaseUrl(req);
   const redirectUri = process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/oauth/callback`;
   const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || 'oauth crm.objects.contacts.read';
-  const scopes = scopeSource
-    .split(/\s+/)
-    .map((scope) => scope.trim())
+  const normalizedScopeSource = scopeSource.trim().replace(/^['"]|['"]$/g, '');
+  const scopes = normalizedScopeSource
+    .split(/[\s,]+/)
+    .map((scope) => scope.replace(/^['"]|['"]$/g, '').trim())
     .filter(Boolean);
 
   return {
