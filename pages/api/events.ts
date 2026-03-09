@@ -2,8 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getAuthContext, getOAuthSettings, refreshAccessToken, setAuthCookies } from '../../lib/hubspotAuth';
 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
+const PAGE_LIMIT = '100';
+const MAX_PAGES_PER_TYPE = 20;
 
-const OBJECT_CONFIG: Record<string, { properties: string[]; scopeHint: string }> = {
+type ActivityType = 'meetings' | 'calls' | 'tasks';
+
+const OBJECT_CONFIG: Record<ActivityType, { properties: string[]; scopeHint: string }> = {
   meetings: {
     properties: ['hs_timestamp', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_title', 'hs_meeting_body'],
     scopeHint: 'crm.objects.meetings.read',
@@ -47,6 +51,10 @@ async function fetchObjects(path: string, token: string) {
   return payload;
 }
 
+function isActivityType(value: string): value is ActivityType {
+  return value === 'meetings' || value === 'calls' || value === 'tasks';
+}
+
 function parseHubSpotDate(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const asDate = new Date(value);
@@ -78,13 +86,14 @@ function parseHubSpotDate(value: unknown): string | undefined {
   return undefined;
 }
 
-function toCalendarEvents(results: any[], type: string, portalId?: string) {
+function toCalendarEvents(results: any[], type: ActivityType, portalId?: string) {
   return results
     .map((item) => {
     const props = item.properties || {};
     const start = parseHubSpotDate(
       props.hs_timestamp || props.hs_meeting_start_time || props.createdate
     );
+    const end = parseHubSpotDate(props.hs_meeting_end_time);
 
     const title =
       props.hs_meeting_title ||
@@ -116,7 +125,19 @@ function toCalendarEvents(results: any[], type: string, portalId?: string) {
       return null;
     }
 
-    return { id: item.id, title, start, url, color, extendedProps: item };
+    return {
+      id: `${type}-${item.id}`,
+      title,
+      start,
+      end,
+      url,
+      color,
+      extendedProps: {
+        ...item,
+        activityType: type,
+        sourceId: item.id,
+      },
+    };
   })
     .filter(Boolean);
 }
@@ -125,10 +146,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { type = 'all' } = req.query;
   const auth = getAuthContext(req);
 
-  let token = auth.accessToken || process.env.HUBSPOT_TOKEN;
+  const initialToken = auth.accessToken || process.env.HUBSPOT_TOKEN;
+  let token: string;
   let portal = auth.portalId || process.env.HUBSPOT_PORTAL_ID;
 
-  if (!token) {
+  if (!initialToken) {
     res.status(401).json({
       error: 'HubSpot account is not connected',
       authUrl: '/api/oauth/start',
@@ -136,25 +158,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  token = initialToken;
+
   try {
-    const types = type === 'all' ? ['meetings', 'calls', 'tasks'] : [type.toString()];
+    const requestedType = type.toString();
+    const types: ActivityType[] =
+      requestedType === 'all'
+        ? ['meetings', 'calls', 'tasks']
+        : isActivityType(requestedType)
+          ? [requestedType]
+          : [];
+
+    if (types.length === 0) {
+      res.status(400).json({ error: 'Invalid activity type' });
+      return;
+    }
+
     const allEvents: any[] = [];
     const warnings: string[] = [];
 
-    for (const t of types) {
-      const config = OBJECT_CONFIG[t] || { properties: [], scopeHint: '' };
-      const params = new URLSearchParams({
-        archived: 'false',
-        limit: '100',
-      });
-      if (config.properties.length) {
-        params.set('properties', config.properties.join(','));
-      }
-      const path = `/crm/v3/objects/${t}?${params.toString()}`;
-      let data: any;
-
+    const fetchWithRefresh = async (path: string) => {
       try {
-        data = await fetchObjects(path, token);
+        return await fetchObjects(path, token);
       } catch (err) {
         if (
           err instanceof HubSpotApiError &&
@@ -168,18 +193,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (refreshed.hub_id) {
             portal = String(refreshed.hub_id);
           }
-          data = await fetchObjects(path, token);
-        } else if (err instanceof HubSpotApiError && err.status === 403) {
+          return fetchObjects(path, token);
+        }
+
+        throw err;
+      }
+    };
+
+    for (const t of types) {
+      const config = OBJECT_CONFIG[t];
+      let after: string | undefined;
+      let page = 0;
+
+      try {
+        while (page < MAX_PAGES_PER_TYPE) {
+          const params = new URLSearchParams({
+            archived: 'false',
+            limit: PAGE_LIMIT,
+            properties: config.properties.join(','),
+          });
+          if (after) {
+            params.set('after', after);
+          }
+
+          const path = `/crm/v3/objects/${t}?${params.toString()}`;
+          const data = await fetchWithRefresh(path);
+
+          if (data?.results) {
+            allEvents.push(...toCalendarEvents(data.results, t, portal));
+          }
+
+          const nextAfter = data?.paging?.next?.after;
+          if (!nextAfter) {
+            break;
+          }
+
+          after = String(nextAfter);
+          page += 1;
+        }
+      } catch (err) {
+        if (err instanceof HubSpotApiError && err.status === 403) {
           const scopeHint = config.scopeHint ? ` (${config.scopeHint})` : '';
           warnings.push(`No permission for ${t}${scopeHint}`);
           continue;
-        } else {
-          throw err;
         }
-      }
 
-      if (data.results) {
-        allEvents.push(...toCalendarEvents(data.results, t, portal));
+        throw err;
       }
     }
 

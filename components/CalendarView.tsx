@@ -4,6 +4,14 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
+type ActivityType = 'meetings' | 'calls' | 'tasks';
+
+const FILTER_OPTIONS: Array<{ key: ActivityType; label: string }> = [
+  { key: 'meetings', label: 'Schůzky' },
+  { key: 'calls', label: 'Volání' },
+  { key: 'tasks', label: 'Úkoly' },
+];
+
 interface CalendarEvent {
   id: string;
   title: string;
@@ -19,6 +27,11 @@ const CalendarView = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<Record<ActivityType, boolean>>({
+    meetings: true,
+    calls: true,
+    tasks: true,
+  });
 
   useEffect(() => {
     async function loadEvents() {
@@ -54,6 +67,21 @@ const CalendarView = () => {
     loadEvents();
   }, []);
 
+  const visibleEvents = events.filter((event) => {
+    const type = event.extendedProps?.activityType as ActivityType | undefined;
+    if (!type) {
+      return true;
+    }
+    return selectedTypes[type];
+  });
+
+  const toggleType = (type: ActivityType) => {
+    setSelectedTypes((previous) => ({
+      ...previous,
+      [type]: !previous[type],
+    }));
+  };
+
   if (loading) {
     return <p>Loading…</p>;
   }
@@ -75,22 +103,41 @@ const CalendarView = () => {
   }
 
   return (
-    <FullCalendar
-      plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-      initialView="dayGridMonth"
-      events={events}
-      headerToolbar={{
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek,timeGridDay',
-      }}
-      eventClick={(info) => {
-        if (info.event.url) {
-          window.open(info.event.url, '_blank');
-          info.jsEvent.preventDefault();
-        }
-      }}
-    />
+    <>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+        {FILTER_OPTIONS.map((option) => (
+          <label key={option.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={selectedTypes[option.key]}
+              onChange={() => toggleType(option.key)}
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+
+      {visibleEvents.length === 0 ? (
+        <p>Pro vybrané filtry nejsou dostupné žádné události.</p>
+      ) : (
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          events={visibleEvents}
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay',
+          }}
+          eventClick={(info) => {
+            if (info.event.url) {
+              window.open(info.event.url, '_blank');
+              info.jsEvent.preventDefault();
+            }
+          }}
+        />
+      )}
+    </>
   );
 };
 
