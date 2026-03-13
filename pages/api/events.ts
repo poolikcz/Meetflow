@@ -5,19 +5,39 @@ const HUBSPOT_BASE = 'https://api.hubapi.com';
 const PAGE_LIMIT = '100';
 const MAX_PAGES_PER_TYPE = 20;
 
+interface CalendarOwner {
+  id: string;
+  label: string;
+}
+
+interface CalendarEventResponse {
+  events: any[];
+  owners: CalendarOwner[];
+}
+
 type ActivityType = 'meetings' | 'calls' | 'tasks';
 
-const OBJECT_CONFIG: Record<ActivityType, { properties: string[]; scopeHint: string }> = {
+const OBJECT_CONFIG: Record<
+  ActivityType,
+  { properties: string[]; scopeHint: string }
+> = {
   meetings: {
-    properties: ['hs_timestamp', 'hs_meeting_start_time', 'hs_meeting_end_time', 'hs_meeting_title', 'hs_meeting_body'],
+    properties: [
+      'hs_timestamp',
+      'hs_meeting_start_time',
+      'hs_meeting_end_time',
+      'hs_meeting_title',
+      'hs_meeting_body',
+      'hubspot_owner_id',
+    ],
     scopeHint: 'crm.objects.meetings.read',
   },
   calls: {
-    properties: ['hs_timestamp', 'hs_call_title', 'hs_call_body'],
+    properties: ['hs_timestamp', 'hs_call_title', 'hs_call_body', 'hubspot_owner_id'],
     scopeHint: 'crm.objects.calls.read',
   },
   tasks: {
-    properties: ['hs_timestamp', 'hs_task_subject', 'hs_task_body'],
+    properties: ['hs_timestamp', 'hs_task_subject', 'hs_task_body', 'hubspot_owner_id'],
     scopeHint: 'crm.objects.tasks.read',
   },
 };
@@ -125,6 +145,8 @@ function toCalendarEvents(results: any[], type: ActivityType, portalId?: string)
       return null;
     }
 
+    const ownerId = props.hubspot_owner_id ? String(props.hubspot_owner_id) : undefined;
+
     return {
       id: `${type}-${item.id}`,
       title,
@@ -136,6 +158,7 @@ function toCalendarEvents(results: any[], type: ActivityType, portalId?: string)
         ...item,
         activityType: type,
         sourceId: item.id,
+        ownerId,
       },
     };
   })
@@ -250,7 +273,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
 
-    res.status(200).json(allEvents);
+    // Extract unique owner IDs
+    const uniqueOwnerIds = new Set<string>();
+    allEvents.forEach((event) => {
+      if (event.extendedProps?.ownerId) {
+        uniqueOwnerIds.add(event.extendedProps.ownerId);
+      }
+    });
+
+    const owners: CalendarOwner[] = Array.from(uniqueOwnerIds).map((id) => ({
+      id,
+      label: `Owner ${id}`,
+    }));
+
+    const response: CalendarEventResponse = {
+      events: allEvents,
+      owners,
+    };
+
+    res.status(200).json(response);
   } catch (err) {
     console.error(err);
 
