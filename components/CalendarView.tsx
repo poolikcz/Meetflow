@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -111,6 +111,7 @@ interface CalendarPaneProps {
   noResultsDescription: string;
   calendarLocale: string;
   calendarUses12h: boolean;
+  layoutSignature: string;
   onEventClick: (detail: SelectedEventDetail) => void;
 }
 
@@ -120,8 +121,49 @@ const CalendarPane = memo(function CalendarPane({
   noResultsDescription,
   calendarLocale,
   calendarUses12h,
+  layoutSignature,
   onEventClick,
 }: CalendarPaneProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const calendarRef = useRef<FullCalendar | null>(null);
+
+  const updateCalendarSize = useCallback(() => {
+    calendarRef.current?.getApi().updateSize();
+  }, []);
+
+  useEffect(() => {
+    updateCalendarSize();
+
+    if (!containerRef.current || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    let frameId = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        updateCalendarSize();
+      });
+    });
+
+    observer.observe(containerRef.current);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [updateCalendarSize]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      updateCalendarSize();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [layoutSignature, updateCalendarSize]);
+
   const timeFormat = useMemo(
     () => ({
       hour: '2-digit' as const,
@@ -143,8 +185,9 @@ const CalendarPane = memo(function CalendarPane({
 
       <Card>
         <CardContent className="p-2 md:p-3">
-          <div className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
+          <div ref={containerRef} className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
             <FullCalendar
+              ref={calendarRef}
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
               locales={CALENDAR_LOCALES}
               locale={calendarLocale}
@@ -384,6 +427,8 @@ const CalendarView = () => {
     setIsDetailVisible(true);
   }, []);
 
+  const layoutSignature = `${isFilterVisible}-${isDetailVisible}`;
+
   if (loading) {
     return (
       <Card>
@@ -530,6 +575,7 @@ const CalendarView = () => {
           noResultsDescription={t.noResultsDescription}
           calendarLocale={calendarLocale}
           calendarUses12h={calendarUses12h}
+          layoutSignature={layoutSignature}
           onEventClick={handleCalendarEventClick}
         />
 

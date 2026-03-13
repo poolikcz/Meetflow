@@ -11,6 +11,7 @@ const USER_PAGE_LIMIT = 500;
 const MAX_USER_PAGES = 20;
 const CRM_USER_PAGE_LIMIT = 100;
 const MAX_CRM_USER_PAGES = 20;
+const COMPACT_EVENT_DURATION_MINUTES = 5;
 
 interface CalendarOwner {
   id: string;
@@ -110,7 +111,7 @@ const OBJECT_CONFIG: Record<
     scopeHint: 'crm.objects.meetings.read',
   },
   calls: {
-    properties: ['hs_timestamp', 'hs_call_title', 'hs_call_body', 'hubspot_owner_id'],
+    properties: ['hs_timestamp', 'hs_call_title', 'hs_call_body', 'hs_call_duration', 'hubspot_owner_id'],
     scopeHint: 'crm.objects.calls.read',
   },
   tasks: {
@@ -185,6 +186,70 @@ function parseHubSpotDate(value: unknown): string | undefined {
     const parsed = Date.parse(trimmed);
     if (!Number.isNaN(parsed)) {
       return new Date(parsed).toISOString();
+    }
+  }
+
+  return undefined;
+}
+
+function addMinutesToIsoString(value: string, minutes: number): string | undefined {
+  const asDate = new Date(value);
+  if (Number.isNaN(asDate.getTime())) {
+    return undefined;
+  }
+
+  asDate.setMinutes(asDate.getMinutes() + minutes);
+  return asDate.toISOString();
+}
+
+function parseDurationMinutes(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    if (value >= 60_000) {
+      return value / 60_000;
+    }
+
+    if (value >= 60) {
+      return value / 60;
+    }
+
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    if (/^\d+(\.\d+)?$/.test(trimmed)) {
+      return parseDurationMinutes(Number(trimmed));
+    }
+
+    const isoMatch = trimmed.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+    if (isoMatch) {
+      const hours = Number(isoMatch[1] || 0);
+      const minutes = Number(isoMatch[2] || 0);
+      const seconds = Number(isoMatch[3] || 0);
+      const totalMinutes = hours * 60 + minutes + seconds / 60;
+      return totalMinutes > 0 ? totalMinutes : undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function getExplicitEndFromProps(props: any, type: ActivityType): string | undefined {
+  const candidatesByType: Record<ActivityType, string[]> = {
+    meetings: ['hs_meeting_end_time'],
+    calls: ['hs_call_end_time', 'hs_meeting_end_time'],
+    tasks: ['hs_task_end_date', 'hs_task_completion_date', 'hs_meeting_end_time'],
+  };
+
+  const candidates = candidatesByType[type] || [];
+  for (const key of candidates) {
+    const parsed = parseHubSpotDate(props?.[key]);
+    if (parsed) {
+      return parsed;
     }
   }
 
@@ -608,7 +673,18 @@ function toCalendarEvents(results: any[], type: ActivityType, portalId?: string)
     const start = parseHubSpotDate(
       props.hs_timestamp || props.hs_meeting_start_time || props.createdate
     );
-    const end = parseHubSpotDate(props.hs_meeting_end_time);
+
+    const explicitEnd = getExplicitEndFromProps(props, type);
+    const callDurationMinutes = type === 'calls' ? parseDurationMinutes(props.hs_call_duration) : undefined;
+    const durationEnd =
+      start && callDurationMinutes && callDurationMinutes > 0
+        ? addMinutesToIsoString(start, Math.max(1, Math.round(callDurationMinutes)))
+        : undefined;
+    const compactEnd =
+      start && type !== 'meetings'
+        ? addMinutesToIsoString(start, COMPACT_EVENT_DURATION_MINUTES)
+        : undefined;
+    const end = explicitEnd || durationEnd || compactEnd;
 
     const title =
       props.hs_meeting_title ||
