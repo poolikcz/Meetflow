@@ -8,13 +8,12 @@ const REFRESH_COOKIE = 'hubspot_refresh_token';
 const PORTAL_COOKIE = 'hubspot_portal_id';
 const STATE_COOKIE = 'hubspot_oauth_state';
 
-const REQUIRED_HUBSPOT_SCOPES = [
+const DEFAULT_HUBSPOT_SCOPES = [
   'oauth',
   'crm.objects.contacts.read',
   'crm.objects.meetings.read',
   'crm.objects.calls.read',
   'crm.objects.tasks.read',
-  'crm.objects.owners.read',
 ];
 
 type CookieOptions = {
@@ -30,6 +29,7 @@ export type HubSpotOAuthSettings = {
   clientSecret: string;
   redirectUri: string;
   scopes: string[];
+  optionalScopes: string[];
   postAuthRedirect: string;
 };
 
@@ -118,11 +118,22 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || getRequestBaseUrl(req);
   const redirectUri = process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/oauth/callback`;
-  const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || REQUIRED_HUBSPOT_SCOPES.join(' ');
+  const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || DEFAULT_HUBSPOT_SCOPES.join(' ');
+  const optionalScopeSource = process.env.HUBSPOT_OPTIONAL_SCOPES || '';
   const normalizedScopeSource = scopeSource.trim().replace(/^['"]|['"]$/g, '');
+  const normalizedOptionalScopeSource = optionalScopeSource.trim().replace(/^['"]|['"]$/g, '');
   const scopes = Array.from(
     new Set(
-      [...normalizedScopeSource.split(/[\s,]+/), ...REQUIRED_HUBSPOT_SCOPES]
+      normalizedScopeSource
+        .split(/[\s,]+/)
+        .map((scope) => scope.replace(/^['"]|['"]$/g, '').trim())
+        .filter(Boolean)
+    )
+  );
+  const optionalScopes = Array.from(
+    new Set(
+      normalizedOptionalScopeSource
+        .split(/[\s,]+/)
         .map((scope) => scope.replace(/^['"]|['"]$/g, '').trim())
         .filter(Boolean)
     )
@@ -133,6 +144,7 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
     clientSecret,
     redirectUri,
     scopes,
+    optionalScopes,
     postAuthRedirect: process.env.HUBSPOT_POST_AUTH_REDIRECT || baseUrl,
   };
 }
@@ -142,6 +154,9 @@ export function buildAuthorizeUrl(settings: HubSpotOAuthSettings, state: string)
   authUrl.searchParams.set('client_id', settings.clientId);
   authUrl.searchParams.set('redirect_uri', settings.redirectUri);
   authUrl.searchParams.set('scope', settings.scopes.join(' '));
+  if (settings.optionalScopes.length > 0) {
+    authUrl.searchParams.set('optional_scope', settings.optionalScopes.join(' '));
+  }
   authUrl.searchParams.set('state', state);
   return authUrl.toString();
 }

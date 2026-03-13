@@ -725,7 +725,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ownerReconnectUrl: ownerReconnectRequired ? '/api/oauth/start' : undefined,
       ownerWarning:
         ownerReconnectRequired && ownerIds.length > 0
-          ? 'Pro načtení jmen ownerů je potřeba znovu připojit HubSpot s oprávněním pro owners.'
+          ? 'Pro načtení jmen ownerů přidejte do HubSpot app scope crm.objects.owners.read, případně jej nastavte jako volitelný scope, a potom proveďte reconnect.'
           : undefined,
     };
 
