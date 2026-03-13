@@ -16,12 +16,29 @@ interface CalendarOwner {
 interface CalendarEventResponse {
   events: any[];
   owners: CalendarOwner[];
+  ownerReconnectRequired?: boolean;
+  ownerReconnectUrl?: string;
+  ownerWarning?: string;
 }
 
 type ActivityType = 'meetings' | 'calls' | 'tasks';
 type SourceObjectType = 'companies' | 'contacts' | 'deals' | 'tickets';
 
 const SOURCE_OBJECT_TYPES: SourceObjectType[] = ['companies', 'contacts', 'deals', 'tickets'];
+const URL_SOURCE_OBJECT_TYPES: SourceObjectType[] = ['contacts', 'companies', 'deals', 'tickets'];
+
+const HUBSPOT_RECORD_OBJECT_IDS: Record<SourceObjectType, string> = {
+  contacts: '0-1',
+  companies: '0-2',
+  deals: '0-3',
+  tickets: '0-5',
+};
+
+const HUBSPOT_ACTIVITY_QUERY_PARAMS: Record<ActivityType, string> = {
+  meetings: 'meetingId',
+  calls: 'callId',
+  tasks: 'taskId',
+};
 
 const SOURCE_OBJECT_CONFIG: Record<
   SourceObjectType,
@@ -250,7 +267,11 @@ async function fetchOwnerLabelById(
       if (label && label !== `Owner ${ownerId}`) {
         return label;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof HubSpotApiError && error.status === 403) {
+        throw error;
+      }
+
       continue;
     }
   }
@@ -262,6 +283,7 @@ async function fetchOwnerLabels(
   fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
 ) {
   const labelsByAnyOwnerKey: Record<string, string> = {};
+  let missingScope = false;
 
   const addOwnersToMap = (owners: any[]) => {
     owners.forEach((owner: any) => {
@@ -302,7 +324,11 @@ async function fetchOwnerLabels(
         page += 1;
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof HubSpotApiError && error.status === 403) {
+      missingScope = true;
+    }
+
     // fallback to v2 endpoint below
   }
 
@@ -311,12 +337,19 @@ async function fetchOwnerLabels(
       const data = await fetchWithRefresh('/owners/v2/owners?inactive=true');
       const owners = Array.isArray(data) ? data : [];
       addOwnersToMap(owners);
-    } catch {
+    } catch (error) {
+      if (error instanceof HubSpotApiError && error.status === 403) {
+        missingScope = true;
+      }
+
       // no-op; handled by caller fallback
     }
   }
 
-  return labelsByAnyOwnerKey;
+  return {
+    labelsByAnyOwnerKey,
+    missingScope,
+  };
 }
 
 function getAssociatedIds(associations: any, objectType: SourceObjectType) {
@@ -329,6 +362,30 @@ function getAssociatedIds(associations: any, objectType: SourceObjectType) {
     .map((item) => item?.id)
     .filter((id) => id !== undefined && id !== null)
     .map((id) => String(id));
+}
+
+function buildHubSpotActivityUrl(
+  portalId: string | undefined,
+  activityType: ActivityType,
+  activityId: string,
+  associations: any
+) {
+  if (!portalId) {
+    return undefined;
+  }
+
+  for (const objectType of URL_SOURCE_OBJECT_TYPES) {
+    const sourceRecordId = getAssociatedIds(associations, objectType)[0];
+    if (!sourceRecordId) {
+      continue;
+    }
+
+    const objectTypeId = HUBSPOT_RECORD_OBJECT_IDS[objectType];
+    const queryParam = HUBSPOT_ACTIVITY_QUERY_PARAMS[activityType];
+    return `https://app.hubspot.com/contacts/${portalId}/record/${objectTypeId}/${sourceRecordId}?${queryParam}=${activityId}`;
+  }
+
+  return undefined;
 }
 
 function chunkArray<T>(values: T[], chunkSize: number) {
@@ -391,9 +448,7 @@ function toCalendarEvents(results: any[], type: ActivityType, portalId?: string)
       props.summary ||
       type;
 
-    const url = portalId
-      ? `https://app.hubspot.com/contacts/${portalId}/record/${type}/${item.id}`
-      : undefined;
+    const url = buildHubSpotActivityUrl(portalId, type, String(item.id), item.associations);
     let color;
     switch (type) {
       case 'meetings':
@@ -552,9 +607,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const ownerIds = Array.from(uniqueOwnerIds);
     let ownerLabelsByKey: Record<string, string> = {};
+    let ownerReconnectRequired = false;
 
     try {
-      ownerLabelsByKey = await fetchOwnerLabels(fetchWithRefresh);
+      const ownerLookup = await fetchOwnerLabels(fetchWithRefresh);
+      ownerLabelsByKey = ownerLookup.labelsByAnyOwnerKey;
+      ownerReconnectRequired = ownerLookup.missingScope;
     } catch {
       ownerLabelsByKey = {};
     }
@@ -568,8 +626,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return;
         }
 
-        const fallbackById = await fetchOwnerLabelById(id, fetchWithRefresh);
-        ownerNameById[id] = fallbackById || `Owner ${id}`;
+        try {
+          const fallbackById = await fetchOwnerLabelById(id, fetchWithRefresh);
+          ownerNameById[id] = fallbackById || `Owner ${id}`;
+        } catch (error) {
+          if (error instanceof HubSpotApiError && error.status === 403) {
+            ownerReconnectRequired = true;
+          }
+
+          ownerNameById[id] = `Owner ${id}`;
+        }
       })
     );
 
@@ -655,6 +721,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const response: CalendarEventResponse = {
       events: allEvents,
       owners,
+      ownerReconnectRequired,
+      ownerReconnectUrl: ownerReconnectRequired ? '/api/oauth/start' : undefined,
+      ownerWarning:
+        ownerReconnectRequired && ownerIds.length > 0
+          ? 'Pro načtení jmen ownerů je potřeba znovu připojit HubSpot s oprávněním pro owners.'
+          : undefined,
     };
 
     res.status(200).json(response);

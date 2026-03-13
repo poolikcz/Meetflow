@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 
 export type DateFormat = 'eu' | 'us';
 export type TimeFormat = '24h' | '12h';
+export type Language = 'cs' | 'en' | 'de' | 'es';
 
 export interface AppSettings {
   dateFormat: DateFormat;
   timeFormat: TimeFormat;
+  language: Language;
 }
 
 const COOKIE_KEY = 'hubcal_settings';
@@ -14,6 +16,7 @@ const COOKIE_DAYS = 365;
 const DEFAULTS: AppSettings = {
   dateFormat: 'eu',
   timeFormat: '24h',
+  language: 'cs',
 };
 
 function readCookie(): AppSettings {
@@ -25,6 +28,7 @@ function readCookie(): AppSettings {
     return {
       dateFormat: parsed.dateFormat === 'us' ? 'us' : 'eu',
       timeFormat: parsed.timeFormat === '12h' ? '12h' : '24h',
+      language: ['cs', 'en', 'de', 'es'].includes(parsed.language) ? parsed.language : 'cs',
     };
   } catch {
     return DEFAULTS;

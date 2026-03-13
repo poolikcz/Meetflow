@@ -8,6 +8,15 @@ const REFRESH_COOKIE = 'hubspot_refresh_token';
 const PORTAL_COOKIE = 'hubspot_portal_id';
 const STATE_COOKIE = 'hubspot_oauth_state';
 
+const REQUIRED_HUBSPOT_SCOPES = [
+  'oauth',
+  'crm.objects.contacts.read',
+  'crm.objects.meetings.read',
+  'crm.objects.calls.read',
+  'crm.objects.tasks.read',
+  'crm.objects.owners.read',
+];
+
 type CookieOptions = {
   maxAge?: number;
   path?: string;
@@ -109,12 +118,15 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || getRequestBaseUrl(req);
   const redirectUri = process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/oauth/callback`;
-  const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || 'oauth crm.objects.contacts.read';
+  const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || REQUIRED_HUBSPOT_SCOPES.join(' ');
   const normalizedScopeSource = scopeSource.trim().replace(/^['"]|['"]$/g, '');
-  const scopes = normalizedScopeSource
-    .split(/[\s,]+/)
-    .map((scope) => scope.replace(/^['"]|['"]$/g, '').trim())
-    .filter(Boolean);
+  const scopes = Array.from(
+    new Set(
+      [...normalizedScopeSource.split(/[\s,]+/), ...REQUIRED_HUBSPOT_SCOPES]
+        .map((scope) => scope.replace(/^['"]|['"]$/g, '').trim())
+        .filter(Boolean)
+    )
+  );
 
   return {
     clientId,
