@@ -665,6 +665,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const initialToken = auth.accessToken || process.env.HUBSPOT_TOKEN;
   let token: string;
   let portal = auth.portalId || process.env.HUBSPOT_PORTAL_ID;
+  const staticToken = (process.env.HUBSPOT_TOKEN || '').trim();
 
   if (!initialToken) {
     res.status(401).json({
@@ -714,6 +715,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         throw err;
       }
+    };
+
+    const canUseStaticTokenForOwnerLookup = Boolean(staticToken && staticToken !== token);
+    const fetchWithStaticToken = async (path: string, init?: RequestInit) => {
+      if (!staticToken) {
+        throw new Error('Missing HUBSPOT_TOKEN');
+      }
+
+      return fetchObjects(path, staticToken, init);
     };
 
     for (const t of types) {
@@ -809,6 +819,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // no-op
     }
 
+    if (canUseStaticTokenForOwnerLookup && (ownerReconnectRequired || Object.keys(ownerLabelsByKey).length === 0)) {
+      try {
+        const ownerLookupByStaticToken = await fetchOwnerLabels(fetchWithStaticToken);
+        ownerLabelsByKey = {
+          ...ownerLookupByStaticToken.labelsByAnyOwnerKey,
+          ...ownerLabelsByKey,
+        };
+      } catch {
+        // no-op
+      }
+
+      try {
+        const userLookupByStaticToken = await fetchUserLabels(fetchWithStaticToken);
+        ownerLabelsByKey = {
+          ...userLookupByStaticToken.labelsByAnyUserKey,
+          ...ownerLabelsByKey,
+        };
+      } catch {
+        // no-op
+      }
+
+      try {
+        const crmUserLookupByStaticToken = await fetchCrmUserLabels(fetchWithStaticToken);
+        ownerLabelsByKey = {
+          ...crmUserLookupByStaticToken.labelsByAnyUserKey,
+          ...ownerLabelsByKey,
+        };
+      } catch {
+        // no-op
+      }
+    }
+
     const ownerNameById: Record<string, string> = {};
     await Promise.all(
       ownerIds.map(async (id) => {
@@ -818,18 +860,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return;
         }
 
+        let fallbackById: string | undefined;
+
         try {
-          const fallbackById = await fetchOwnerLabelById(id, fetchWithRefresh);
-          ownerNameById[id] = fallbackById || `Owner ${id}`;
+          fallbackById = await fetchOwnerLabelById(id, fetchWithRefresh);
         } catch (error) {
           if (error instanceof HubSpotApiError && error.status === 403) {
             ownerReconnectRequired = true;
           }
-
-          ownerNameById[id] = `Owner ${id}`;
         }
+
+        if (!fallbackById && canUseStaticTokenForOwnerLookup) {
+          try {
+            fallbackById = await fetchOwnerLabelById(id, fetchWithStaticToken);
+          } catch {
+            // no-op
+          }
+        }
+
+        ownerNameById[id] = fallbackById || `Owner ${id}`;
       })
     );
+
+    const unresolvedOwnerCount = ownerIds.filter((id) => ownerNameById[id] === `Owner ${id}`).length;
+    if (unresolvedOwnerCount === 0) {
+      ownerReconnectRequired = false;
+    }
 
     allEvents.forEach((event) => {
       const ownerId = event.extendedProps?.ownerId;
@@ -917,7 +973,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ownerReconnectUrl: ownerReconnectRequired ? '/api/oauth/start' : undefined,
       ownerWarning:
         ownerReconnectRequired && ownerIds.length > 0
-          ? 'Pro načtení jmen ownerů přidejte do HubSpot app scopes oprávnění crm.objects.owners.read, settings.users.read nebo crm.objects.users.read a potom proveďte reconnect.'
+          ? 'Pro načtení jmen ownerů přidejte do HubSpot app scopes oprávnění crm.objects.owners.read, settings.users.read nebo crm.objects.users.read a potom proveďte reconnect. Pokud používáte Private App token, nastavte HUBSPOT_TOKEN i ve Vercelu.'
           : undefined,
     };
 
