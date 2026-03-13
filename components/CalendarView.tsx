@@ -3,7 +3,17 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { AlertCircle, ExternalLink, Filter, UserCircle2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ExternalLink,
+  Filter,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  UserCircle2,
+} from 'lucide-react';
+import { useSettingsContext } from '../lib/SettingsContext';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
@@ -11,7 +21,6 @@ import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '../lib/utils';
 
@@ -84,7 +93,9 @@ const CalendarView = () => {
   });
   const [selectedOwners, setSelectedOwners] = useState<Record<string, boolean>>({});
   const [selectedEvent, setSelectedEvent] = useState<SelectedEventDetail | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isFilterVisible, setIsFilterVisible] = useState(true);
+  const [isDetailVisible, setIsDetailVisible] = useState(true);
+  const { settings } = useSettingsContext();
 
   useEffect(() => {
     async function loadEvents() {
@@ -161,7 +172,17 @@ const CalendarView = () => {
       return value;
     }
 
-    return asDate.toLocaleString('cs-CZ');
+    const is12h = settings.timeFormat === '12h';
+    const locale = settings.dateFormat === 'us' ? 'en-US' : 'cs-CZ';
+
+    return asDate.toLocaleString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: is12h,
+    });
   };
 
   const getTypeLabel = (type?: ActivityType) => {
@@ -284,65 +305,97 @@ const CalendarView = () => {
 
   return (
     <>
-      <div className="grid gap-4 xl:grid-cols-[300px_1fr]">
-        <Card className="h-fit xl:sticky xl:top-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Filter className="h-4 w-4" />
-              Filtrace
-            </CardTitle>
-            <CardDescription>Vyberte, co se má zobrazit v kalendáři.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <p className="text-sm font-medium">Typ záznamu</p>
-              {FILTER_OPTIONS.map((option) => (
-                <label key={option.key} className="flex cursor-pointer items-center gap-3 text-sm">
-                  <Checkbox
-                    checked={selectedTypes[option.key]}
-                    onCheckedChange={(checked) => {
-                      setSelectedTypes((previous) => ({
-                        ...previous,
-                        [option.key]: checked === true,
-                      }));
-                    }}
-                  />
-                  <span className={cn('h-2.5 w-2.5 rounded-full', option.dotClass)} />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsFilterVisible((previous) => !previous)}
+        >
+          {isFilterVisible ? (
+            <PanelLeftClose className="mr-2 h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="mr-2 h-4 w-4" />
+          )}
+          {isFilterVisible ? 'Skrýt filtraci' : 'Zobrazit filtraci'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsDetailVisible((previous) => !previous)}
+        >
+          {isDetailVisible ? (
+            <PanelRightClose className="mr-2 h-4 w-4" />
+          ) : (
+            <PanelRightOpen className="mr-2 h-4 w-4" />
+          )}
+          {isDetailVisible ? 'Skrýt detail' : 'Zobrazit detail'}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Kliknutím na záznam aktualizujete detail v pravém panelu.
+        </span>
+      </div>
 
-            {owners.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Owner</p>
-                  <ScrollArea className="h-48 pr-3">
-                    <div className="space-y-2">
-                      {owners.map((owner) => (
-                        <label key={owner.id} className="flex cursor-pointer items-center gap-3 text-sm">
-                          <Checkbox
-                            checked={selectedOwners[owner.id] ?? true}
-                            onCheckedChange={(checked) => {
-                              setSelectedOwners((previous) => ({
-                                ...previous,
-                                [owner.id]: checked === true,
-                              }));
-                            }}
-                          />
-                          <span className="truncate">{owner.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        {isFilterVisible && (
+          <Card className="h-fit xl:sticky xl:top-6 xl:w-[300px] xl:shrink-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Filter className="h-4 w-4" />
+                Filtrace
+              </CardTitle>
+              <CardDescription>Vyberte, co se má zobrazit v kalendáři.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Typ záznamu</p>
+                {FILTER_OPTIONS.map((option) => (
+                  <label key={option.key} className="flex cursor-pointer items-center gap-3 text-sm">
+                    <Checkbox
+                      checked={selectedTypes[option.key]}
+                      onCheckedChange={(checked) => {
+                        setSelectedTypes((previous) => ({
+                          ...previous,
+                          [option.key]: checked === true,
+                        }));
+                      }}
+                    />
+                    <span className={cn('h-2.5 w-2.5 rounded-full', option.dotClass)} />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
 
-        <div className="space-y-4">
+              {owners.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">Owner</p>
+                    <ScrollArea className="h-48 pr-3">
+                      <div className="space-y-2">
+                        {owners.map((owner) => (
+                          <label key={owner.id} className="flex cursor-pointer items-center gap-3 text-sm">
+                            <Checkbox
+                              checked={selectedOwners[owner.id] ?? true}
+                              onCheckedChange={(checked) => {
+                                setSelectedOwners((previous) => ({
+                                  ...previous,
+                                  [owner.id]: checked === true,
+                                }));
+                              }}
+                            />
+                            <span className="truncate">{owner.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="min-w-0 flex-1 space-y-4">
           {visibleEvents.length === 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -352,123 +405,123 @@ const CalendarView = () => {
           )}
 
           <Card>
-            <CardContent className="p-3 md:p-4">
-              <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                events={visibleEvents}
-                headerToolbar={{
-                  left: 'prev,next today',
-                  center: 'title',
-                  right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                }}
-                eventClick={(info) => {
-                  info.jsEvent.preventDefault();
+            <CardContent className="p-2 md:p-3">
+              <div className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
+                <FullCalendar
+                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                  initialView="dayGridMonth"
+                  events={visibleEvents}
+                  height="100%"
+                  expandRows
+                  headerToolbar={{
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay',
+                  }}
+                  eventClick={(info) => {
+                    info.jsEvent.preventDefault();
 
-                  const extendedProps = info.event.extendedProps || {};
-                  const properties = extendedProps.properties || {};
-                  const description =
-                    properties.hs_meeting_body ||
-                    properties.hs_call_body ||
-                    properties.hs_task_body ||
-                    undefined;
+                    const extendedProps = info.event.extendedProps || {};
+                    const properties = extendedProps.properties || {};
+                    const description =
+                      properties.hs_meeting_body ||
+                      properties.hs_call_body ||
+                      properties.hs_task_body ||
+                      undefined;
 
-                  setSelectedEvent({
-                    id: info.event.id,
-                    title: info.event.title,
-                    start: info.event.start?.toISOString() || '',
-                    end: info.event.end?.toISOString(),
-                    url: info.event.url,
-                    activityType: extendedProps.activityType as ActivityType | undefined,
-                    ownerId: extendedProps.ownerId,
-                    ownerName: extendedProps.ownerName,
-                    sourceLabel: extendedProps.sourceLabel,
-                    description,
-                  });
-                  setIsDetailOpen(true);
-                }}
-              />
+                    setSelectedEvent({
+                      id: info.event.id,
+                      title: info.event.title,
+                      start: info.event.start?.toISOString() || '',
+                      end: info.event.end?.toISOString(),
+                      url: info.event.url,
+                      activityType: extendedProps.activityType as ActivityType | undefined,
+                      ownerId: extendedProps.ownerId,
+                      ownerName: extendedProps.ownerName,
+                      sourceLabel: extendedProps.sourceLabel,
+                      description,
+                    });
+                  }}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
-      </div>
 
-      <Sheet
-        open={isDetailOpen}
-        onOpenChange={(open) => {
-          setIsDetailOpen(open);
-          if (!open) {
-            setSelectedEvent(null);
-          }
-        }}
-      >
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-          {selectedEvent ? (
-            <div className="space-y-5">
-              <SheetHeader>
-                <SheetTitle>Detail záznamu</SheetTitle>
-                <SheetDescription>
-                  {selectedEvent.sourceLabel || 'HubSpot aktivita'}
-                </SheetDescription>
-              </SheetHeader>
-
-              <div className="space-y-3">
-                <h3 className="text-xl font-semibold leading-tight">{selectedEvent.title}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedEvent.activityType && (
-                    <Badge
-                      variant="outline"
-                      className={cn(getTypeMeta(selectedEvent.activityType)?.badgeClass)}
-                    >
-                      {getTypeLabel(selectedEvent.activityType)}
+        {isDetailVisible && (
+          <Card className="h-fit xl:sticky xl:top-6 xl:w-[360px] xl:shrink-0">
+            <CardHeader>
+              <CardTitle>Detail záznamu</CardTitle>
+              <CardDescription>
+                {selectedEvent?.sourceLabel || 'Klikněte na událost v kalendáři'}
+              </CardDescription>
+            </CardHeader>
+            {selectedEvent ? (
+              <CardContent className="space-y-5">
+                <div className="space-y-3">
+                  <h3 className="text-xl font-semibold leading-tight">{selectedEvent.title}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEvent.activityType && (
+                      <Badge
+                        variant="outline"
+                        className={cn(getTypeMeta(selectedEvent.activityType)?.badgeClass)}
+                      >
+                        {getTypeLabel(selectedEvent.activityType)}
+                      </Badge>
+                    )}
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <UserCircle2 className="h-3.5 w-3.5" />
+                      {getOwnerLabel(selectedEvent.ownerId, selectedEvent.ownerName)}
                     </Badge>
-                  )}
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <UserCircle2 className="h-3.5 w-3.5" />
-                    {getOwnerLabel(selectedEvent.ownerId, selectedEvent.ownerName)}
-                  </Badge>
+                  </div>
                 </div>
-              </div>
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <div className="text-sm">
-                    <p className="text-muted-foreground">Začátek</p>
-                    <p className="font-medium">{formatDate(selectedEvent.start)}</p>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-muted-foreground">Konec</p>
-                    <p className="font-medium">{formatDate(selectedEvent.end)}</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {selectedEvent.description && (
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Poznámka</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div
-                      className="text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedEvent.description) }}
-                    />
+                  <CardContent className="space-y-3 p-4">
+                    <div className="text-sm">
+                      <p className="text-muted-foreground">Začátek</p>
+                      <p className="font-medium">{formatDate(selectedEvent.start)}</p>
+                    </div>
+                    <div className="text-sm">
+                      <p className="text-muted-foreground">Konec</p>
+                      <p className="font-medium">{formatDate(selectedEvent.end)}</p>
+                    </div>
                   </CardContent>
                 </Card>
-              )}
 
-              {selectedEvent.url && (
-                <Button asChild className="w-full">
-                  <a href={selectedEvent.url} target="_blank" rel="noreferrer">
-                    Otevřít záznam v HubSpot
-                    <ExternalLink className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-              )}
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+                {selectedEvent.description && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Poznámka</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div
+                        className="text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedEvent.description) }}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {selectedEvent.url && (
+                  <Button asChild className="w-full">
+                    <a href={selectedEvent.url} target="_blank" rel="noreferrer">
+                      Otevřít záznam v HubSpot
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            ) : (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Vyberte událost v kalendáři a její obsah se zobrazí tady.
+                </p>
+              </CardContent>
+            )}
+          </Card>
+        )}
+      </div>
     </>
   );
 };

@@ -187,10 +187,75 @@ function toOwnerLabel(owner: any, fallbackId: string) {
   return `Owner ${fallbackId}`;
 }
 
+function normalizeOwnerKey(value: unknown) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  if (/^\d+\.0+$/.test(raw)) {
+    return raw.replace(/\.0+$/, '');
+  }
+
+  return raw;
+}
+
+function ownerKeyCandidates(value: unknown) {
+  const raw = value === undefined || value === null ? undefined : String(value).trim();
+  const normalized = normalizeOwnerKey(value);
+  const keys = [raw, normalized].filter((item): item is string => Boolean(item));
+  return Array.from(new Set(keys));
+}
+
 function ownerLookupKeys(owner: any) {
-  return [owner?.id, owner?.userId, owner?.userIdIncludingInactive]
-    .filter((value) => value !== undefined && value !== null)
-    .map((value) => String(value));
+  const rawKeys = [owner?.id, owner?.ownerId, owner?.userId, owner?.userIdIncludingInactive];
+
+  return Array.from(
+    new Set(
+      rawKeys.flatMap((value) => ownerKeyCandidates(value))
+    )
+  );
+}
+
+function resolveOwnerLabel(ownerId: string, labelsByAnyOwnerKey: Record<string, string>) {
+  const keys = ownerKeyCandidates(ownerId);
+  for (const key of keys) {
+    const label = labelsByAnyOwnerKey[key];
+    if (label) {
+      return label;
+    }
+  }
+
+  return undefined;
+}
+
+async function fetchOwnerLabelById(
+  ownerId: string,
+  fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
+) {
+  const candidates = [
+    `/crm/v3/owners/${ownerId}`,
+    `/crm/v3/owners/${ownerId}?idProperty=userId`,
+    `/crm/v3/owners/${ownerId}?idProperty=userIdIncludingInactive`,
+  ];
+
+  for (const path of candidates) {
+    try {
+      const owner = await fetchWithRefresh(path);
+      const label = toOwnerLabel(owner, ownerId);
+      if (label && label !== `Owner ${ownerId}`) {
+        return label;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
 }
 
 async function fetchOwnerLabels(
@@ -198,38 +263,56 @@ async function fetchOwnerLabels(
 ) {
   const labelsByAnyOwnerKey: Record<string, string> = {};
 
-  for (const archived of ['false', 'true']) {
-    let after: string | undefined;
-    let page = 0;
+  const addOwnersToMap = (owners: any[]) => {
+    owners.forEach((owner: any) => {
+      const fallbackId = normalizeOwnerKey(owner?.id) || normalizeOwnerKey(owner?.ownerId) || 'unknown';
+      const label = toOwnerLabel(owner, fallbackId);
 
-    while (page < MAX_OWNER_PAGES) {
-      const params = new URLSearchParams({
-        archived,
-        limit: String(OWNER_PAGE_LIMIT),
+      ownerLookupKeys(owner).forEach((key) => {
+        labelsByAnyOwnerKey[key] = label;
       });
+    });
+  };
 
-      if (after) {
-        params.set('after', after);
-      }
+  try {
+    for (const archived of ['false', 'true']) {
+      let after: string | undefined;
+      let page = 0;
 
-      const data = await fetchWithRefresh(`/crm/v3/owners?${params.toString()}`);
-      const results = Array.isArray(data?.results) ? data.results : [];
-
-      results.forEach((owner: any) => {
-        const fallbackId = String(owner?.id || '');
-        const label = toOwnerLabel(owner, fallbackId || 'unknown');
-        ownerLookupKeys(owner).forEach((key) => {
-          labelsByAnyOwnerKey[key] = label;
+      while (page < MAX_OWNER_PAGES) {
+        const params = new URLSearchParams({
+          archived,
+          limit: String(OWNER_PAGE_LIMIT),
         });
-      });
 
-      const nextAfter = data?.paging?.next?.after;
-      if (!nextAfter) {
-        break;
+        if (after) {
+          params.set('after', after);
+        }
+
+        const data = await fetchWithRefresh(`/crm/v3/owners?${params.toString()}`);
+        const results = Array.isArray(data?.results) ? data.results : [];
+        addOwnersToMap(results);
+
+        const nextAfter = data?.paging?.next?.after;
+        if (!nextAfter) {
+          break;
+        }
+
+        after = String(nextAfter);
+        page += 1;
       }
+    }
+  } catch {
+    // fallback to v2 endpoint below
+  }
 
-      after = String(nextAfter);
-      page += 1;
+  if (Object.keys(labelsByAnyOwnerKey).length === 0) {
+    try {
+      const data = await fetchWithRefresh('/owners/v2/owners?inactive=true');
+      const owners = Array.isArray(data) ? data : [];
+      addOwnersToMap(owners);
+    } catch {
+      // no-op; handled by caller fallback
     }
   }
 
@@ -477,9 +560,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const ownerNameById: Record<string, string> = {};
-    ownerIds.forEach((id) => {
-      ownerNameById[id] = ownerLabelsByKey[id] || `Owner ${id}`;
-    });
+    await Promise.all(
+      ownerIds.map(async (id) => {
+        const mapped = resolveOwnerLabel(id, ownerLabelsByKey);
+        if (mapped) {
+          ownerNameById[id] = mapped;
+          return;
+        }
+
+        const fallbackById = await fetchOwnerLabelById(id, fetchWithRefresh);
+        ownerNameById[id] = fallbackById || `Owner ${id}`;
+      })
+    );
 
     allEvents.forEach((event) => {
       const ownerId = event.extendedProps?.ownerId;
