@@ -1,6 +1,6 @@
 import React from "react";
-import { EmptyState, Link, Text } from "@hubspot/ui-extensions";
 import { hubspot } from "@hubspot/ui-extensions";
+import { QuickAccessContent } from "./QuickAccessContent";
 
 hubspot.extend<'crm.record.tab'>(() => <Extension />);
 
@@ -8,17 +8,13 @@ const Extension = () => {
   const calendarUrl = 'https://meetflow-woad.vercel.app';
 
   return (
-    <>
-      <EmptyState
-        title="Open Meetflow calendar"
-        layout="vertical"
-        imageName='building'
-      >
-        <Text>
-          View meetings, calls and tasks in the external calendar application.
-          <Link href={calendarUrl}> Open calendar</Link>
-        </Text>
-      </EmptyState>
-    </>
+    <QuickAccessContent
+      title="Meetflow calendar"
+      description="Open meetings, calls and tasks in one clean calendar view."
+      url={calendarUrl}
+      linkLabel="Open calendar"
+    />
   );
 };
+
+export default Extension;

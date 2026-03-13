@@ -6,7 +6,10 @@
     "location": "crm.record.tab",
     "entrypoint": "/app/cards/NewCard.tsx",
     "objectTypes": [
-      "contacts"
+      "contacts",
+      "companies",
+      "deals",
+      "tickets"
     ]
   }
 }

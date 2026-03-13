@@ -11,6 +11,9 @@ const STATE_COOKIE = 'hubspot_oauth_state';
 const DEFAULT_HUBSPOT_SCOPES = [
   'oauth',
   'crm.objects.contacts.read',
+  'crm.objects.companies.read',
+  'crm.objects.deals.read',
+  'tickets',
 ];
 
 const DEFAULT_HUBSPOT_OPTIONAL_SCOPES: string[] = [

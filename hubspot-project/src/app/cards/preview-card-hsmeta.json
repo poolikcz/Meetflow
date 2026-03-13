@@ -1,0 +1,15 @@
+{
+  "uid": "meetflow_preview_card",
+  "type": "card",
+  "config": {
+    "name": "Meetflow Preview Access",
+    "location": "crm.preview",
+    "entrypoint": "/app/cards/PreviewCard.tsx",
+    "objectTypes": [
+      "contacts",
+      "companies",
+      "deals",
+      "tickets"
+    ]
+  }
+}

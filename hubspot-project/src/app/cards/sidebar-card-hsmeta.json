@@ -6,7 +6,10 @@
     "location": "crm.record.sidebar",
     "entrypoint": "/app/cards/SidebarCard.tsx",
     "objectTypes": [
-      "contacts"
+      "contacts",
+      "companies",
+      "deals",
+      "tickets"
     ]
   }
 }

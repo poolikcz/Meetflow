@@ -1,0 +1,12 @@
+{
+  "uid": "meetflow_helpdesk_sidebar_card",
+  "type": "card",
+  "config": {
+    "name": "Meetflow Help Desk Access",
+    "location": "helpdesk.sidebar",
+    "entrypoint": "/app/cards/HelpdeskSidebarCard.tsx",
+    "objectTypes": [
+      "tickets"
+    ]
+  }
+}
