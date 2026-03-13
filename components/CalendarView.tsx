@@ -442,7 +442,7 @@ const CalendarView = () => {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>{t.ownerReconnectTitle}</AlertTitle>
               <AlertDescription className="flex flex-wrap items-center gap-3">
-                <span>{t.ownerReconnectDescription}</span>
+                <span>{ownerWarning}</span>
                 <Button asChild size="sm" variant="outline">
                   <a href={ownerReconnectUrl}>{t.reconnectHubSpot}</a>
                 </Button>
