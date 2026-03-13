@@ -19,8 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const authCode = Array.isArray(code) ? code[0] : code;
   const incomingState = Array.isArray(state) ? state[0] : state;
 
-  if (!authCode || !incomingState) {
-    res.status(400).json({ error: 'Missing OAuth code or state' });
+  if (!authCode) {
+    res.status(400).json({ error: 'Missing OAuth code' });
     return;
   }
 
@@ -28,7 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const settings = getOAuthSettings(req);
     const cookieState = getAuthContext(req).state;
 
-    if (!cookieState || cookieState !== incomingState) {
+    // Validate state when either the URL contains state or the session has a
+    // state cookie – this preserves CSRF protection for the normal /oauth/start
+    // flow while allowing direct installs via the HubSpot-provided install URL
+    // (which never sends a state parameter).
+    const stateRequired = !!incomingState || !!cookieState;
+    if (stateRequired && (!cookieState || cookieState !== incomingState)) {
       res.status(400).json({ error: 'Invalid OAuth state' });
       return;
     }
