@@ -9,7 +9,7 @@ const SidebarCard = () => {
 
   return (
     <QuickAccessContent
-      title="Meetflow calendar"
+      title="Meet Flow calendar"
       description="Quick access to meetings, calls and tasks."
       url={calendarUrl}
       linkLabel="Open calendar"

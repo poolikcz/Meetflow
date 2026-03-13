@@ -9,7 +9,7 @@ const HelpdeskSidebarCard = () => {
 
   return (
     <QuickAccessContent
-      title="Meetflow support view"
+      title="Meet Flow support view"
       description="Open customer meetings, calls and tasks from help desk."
       url={calendarUrl}
       linkLabel="Open calendar"

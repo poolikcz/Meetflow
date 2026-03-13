@@ -16,7 +16,7 @@ export function QuickAccessContent({
 }: QuickAccessContentProps) {
   return (
     <Flex direction="row" align="center" gap="sm">
-      <Illustration name="meetings" alt="Meetflow" width={44} height={44} />
+      <Illustration name="meetings" alt="Meet Flow" width={44} height={44} />
 
       <Stack direction="column" distance="flush">
         <Text format={{ fontWeight: 'demibold' }}>{title}</Text>

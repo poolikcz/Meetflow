@@ -2,7 +2,7 @@
   "uid": "meetflow_sidebar_card",
   "type": "card",
   "config": {
-    "name": "Meetflow Quick Access",
+    "name": "Meet Flow Quick Access",
     "location": "crm.record.sidebar",
     "entrypoint": "/app/cards/SidebarCard.tsx",
     "objectTypes": [

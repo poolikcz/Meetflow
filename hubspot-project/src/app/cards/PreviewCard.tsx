@@ -9,7 +9,7 @@ const PreviewCard = () => {
 
   return (
     <QuickAccessContent
-      title="Meetflow preview"
+      title="Meet Flow preview"
       description="Open calendar access directly from CRM preview panels."
       url={calendarUrl}
       linkLabel="Open calendar"

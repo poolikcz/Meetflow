@@ -3,7 +3,8 @@
   "type": "app",
   "config": {
     "description": "Calendar integration for HubSpot activities.",
-    "name": "Meetflow",
+    "name": "Meet Flow",
+    "logo": "/app/app-logo.png",
     "distribution": "marketplace",
     "auth": {
       "type": "oauth",

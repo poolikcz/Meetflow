@@ -9,7 +9,7 @@ const Extension = () => {
 
   return (
     <QuickAccessContent
-      title="Meetflow calendar"
+      title="Meet Flow calendar"
       description="Open meetings, calls and tasks in one clean calendar view."
       url={calendarUrl}
       linkLabel="Open calendar"

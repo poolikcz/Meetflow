@@ -10,13 +10,13 @@ const SettingsPage = () => {
   return (
     <>
       <EmptyState
-        title="Meetflow access"
+        title="Meet Flow access"
         layout="horizontal"
         imageName='building'
       >
         <Text>
           Open the calendar app directly from HubSpot settings.
-          <Link href={setupGuideUrl}> Open Meetflow</Link>
+          <Link href={setupGuideUrl}> Open Meet Flow</Link>
         </Text>
       </EmptyState>
     </>

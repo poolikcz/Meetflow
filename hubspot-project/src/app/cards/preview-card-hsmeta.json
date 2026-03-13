@@ -2,7 +2,7 @@
   "uid": "meetflow_preview_card",
   "type": "card",
   "config": {
-    "name": "Meetflow Preview Access",
+    "name": "Meet Flow Preview Access",
     "location": "crm.preview",
     "entrypoint": "/app/cards/PreviewCard.tsx",
     "objectTypes": [
