@@ -126,6 +126,7 @@ const CalendarPane = memo(function CalendarPane({
 }: CalendarPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const calendarRef = useRef<FullCalendar | null>(null);
+  const [currentView, setCurrentView] = useState('dayGridMonth');
 
   const updateCalendarSize = useCallback(() => {
     calendarRef.current?.getApi().updateSize();
@@ -173,6 +174,46 @@ const CalendarPane = memo(function CalendarPane({
     [calendarUses12h]
   );
 
+  const renderedEvents = useMemo(() => {
+    const useListStyleEvents = currentView === 'timeGridWeek' || currentView === 'timeGridDay';
+
+    if (!useListStyleEvents) {
+      return visibleEvents;
+    }
+
+    const labelFormatter = new Intl.DateTimeFormat(calendarLocale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: calendarUses12h,
+    });
+
+    return visibleEvents.map((event) => {
+      const activityType = event.extendedProps?.activityType as ActivityType | undefined;
+
+      if (activityType === 'meetings') {
+        return event;
+      }
+
+      const startDate = event.start ? new Date(event.start) : null;
+      const timePrefix =
+        startDate && !Number.isNaN(startDate.getTime())
+          ? `${labelFormatter.format(startDate)} `
+          : '';
+
+      return {
+        ...event,
+        title: `${timePrefix}${event.title}`,
+        allDay: true,
+        end: undefined,
+        display: 'list-item' as const,
+        extendedProps: {
+          ...event.extendedProps,
+          originalTitle: event.title,
+        },
+      };
+    });
+  }, [calendarLocale, calendarUses12h, currentView, visibleEvents]);
+
   return (
     <div className="min-w-0 flex-1 space-y-4">
       {visibleEvents.length === 0 && (
@@ -192,13 +233,17 @@ const CalendarPane = memo(function CalendarPane({
               locales={CALENDAR_LOCALES}
               locale={calendarLocale}
               initialView="dayGridMonth"
-              events={visibleEvents}
+              events={renderedEvents}
               height="100%"
               expandRows
               scrollTimeReset={false}
+              eventOrder="start,title"
               eventTimeFormat={timeFormat}
               slotLabelFormat={timeFormat}
               headerToolbar={CALENDAR_HEADER_TOOLBAR}
+              datesSet={(info) => {
+                setCurrentView(info.view.type);
+              }}
               eventClick={(info) => {
                 info.jsEvent.preventDefault();
 
@@ -212,7 +257,7 @@ const CalendarPane = memo(function CalendarPane({
 
                 onEventClick({
                   id: info.event.id,
-                  title: info.event.title,
+                  title: extendedProps.originalTitle || info.event.title,
                   start: info.event.start?.toISOString() || '',
                   end: info.event.end?.toISOString(),
                   url: info.event.url,
