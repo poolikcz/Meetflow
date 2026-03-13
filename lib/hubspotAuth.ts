@@ -11,15 +11,10 @@ const STATE_COOKIE = 'hubspot_oauth_state';
 const DEFAULT_HUBSPOT_SCOPES = [
   'oauth',
   'crm.objects.contacts.read',
-  'crm.objects.meetings.read',
-  'crm.objects.calls.read',
-  'crm.objects.tasks.read',
 ];
 
-const DEFAULT_HUBSPOT_OPTIONAL_SCOPES = [
-  'crm.objects.owners.read',
-  'settings.users.read',
-  'crm.objects.users.read',
+const DEFAULT_HUBSPOT_OPTIONAL_SCOPES: string[] = [
+  // intentionally empty in safe mode to avoid scope mismatch with HubSpot app settings
 ];
 
 type CookieOptions = {
@@ -124,8 +119,15 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || getRequestBaseUrl(req);
   const redirectUri = process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/oauth/callback`;
-  const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || DEFAULT_HUBSPOT_SCOPES.join(' ');
-  const optionalScopeSource = process.env.HUBSPOT_OPTIONAL_SCOPES || DEFAULT_HUBSPOT_OPTIONAL_SCOPES.join(' ');
+  const useCustomScopes = process.env.HUBSPOT_USE_CUSTOM_SCOPES === 'true';
+  const scopeSource =
+    useCustomScopes && process.env.HUBSPOT_OAUTH_SCOPES
+      ? process.env.HUBSPOT_OAUTH_SCOPES
+      : DEFAULT_HUBSPOT_SCOPES.join(' ');
+  const optionalScopeSource =
+    useCustomScopes && process.env.HUBSPOT_OPTIONAL_SCOPES
+      ? process.env.HUBSPOT_OPTIONAL_SCOPES
+      : DEFAULT_HUBSPOT_OPTIONAL_SCOPES.join(' ');
   const normalizedScopeSource = scopeSource.trim().replace(/^['"]|['"]$/g, '');
   const normalizedOptionalScopeSource = optionalScopeSource.trim().replace(/^['"]|['"]$/g, '');
   const scopes = Array.from(

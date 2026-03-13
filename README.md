@@ -15,11 +15,15 @@ This repository contains a Next.js + FullCalendar application designed to be use
    HUBSPOT_CLIENT_ID=your_hubspot_client_id
    HUBSPOT_CLIENT_SECRET=your_hubspot_client_secret
    HUBSPOT_REDIRECT_URI=http://localhost:3000/api/oauth/callback
-   HUBSPOT_OAUTH_SCOPES="oauth crm.objects.contacts.read crm.objects.meetings.read crm.objects.calls.read crm.objects.tasks.read"
-   HUBSPOT_OPTIONAL_SCOPES="crm.objects.owners.read settings.users.read crm.objects.users.read"
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
-   If `HUBSPOT_OPTIONAL_SCOPES` is omitted, the app requests `crm.objects.owners.read settings.users.read crm.objects.users.read` by default.
+   By default, the app uses safe OAuth scopes (`oauth crm.objects.contacts.read`) to avoid scope mismatch.
+   If you want to use custom scopes from env variables, enable this explicitly:
+   ```bash
+   HUBSPOT_USE_CUSTOM_SCOPES=true
+   HUBSPOT_OAUTH_SCOPES="oauth crm.objects.contacts.read crm.objects.meetings.read crm.objects.calls.read crm.objects.tasks.read"
+   HUBSPOT_OPTIONAL_SCOPES="crm.objects.owners.read settings.users.read crm.objects.users.read"
+   ```
    Optional fallback for local-only testing without OAuth:
    ```bash
    HUBSPOT_TOKEN=your_private_app_token
@@ -37,8 +41,9 @@ Deploy to Vercel or any platform that supports Next.js and set these environment
 - `HUBSPOT_CLIENT_ID`
 - `HUBSPOT_CLIENT_SECRET`
 - `HUBSPOT_REDIRECT_URI` (e.g. `https://your-domain.vercel.app/api/oauth/callback`)
-- `HUBSPOT_OAUTH_SCOPES`
-- `HUBSPOT_OPTIONAL_SCOPES` (optional override; defaults to `crm.objects.owners.read settings.users.read crm.objects.users.read`)
+- `HUBSPOT_USE_CUSTOM_SCOPES` (set `true` only if your HubSpot app has matching scope configuration)
+- `HUBSPOT_OAUTH_SCOPES` (used only when `HUBSPOT_USE_CUSTOM_SCOPES=true`)
+- `HUBSPOT_OPTIONAL_SCOPES` (used only when `HUBSPOT_USE_CUSTOM_SCOPES=true`)
 - `NEXT_PUBLIC_APP_URL`
 
 ## HubSpot Integration
