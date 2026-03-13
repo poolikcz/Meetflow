@@ -9,6 +9,8 @@ const OWNER_PAGE_LIMIT = 500;
 const MAX_OWNER_PAGES = 20;
 const USER_PAGE_LIMIT = 500;
 const MAX_USER_PAGES = 20;
+const CRM_USER_PAGE_LIMIT = 100;
+const MAX_CRM_USER_PAGES = 20;
 
 interface CalendarOwner {
   id: string;
@@ -190,7 +192,21 @@ function parseHubSpotDate(value: unknown): string | undefined {
 }
 
 function toOwnerLabel(owner: any, fallbackId: string) {
-  const fullName = [owner?.firstName, owner?.lastName]
+  const properties = owner?.properties || {};
+  const firstName =
+    owner?.firstName ||
+    owner?.firstname ||
+    properties?.firstname ||
+    properties?.hs_given_name ||
+    '';
+  const lastName =
+    owner?.lastName ||
+    owner?.lastname ||
+    properties?.lastname ||
+    properties?.hs_family_name ||
+    '';
+
+  const fullName = [firstName, lastName]
     .filter((value) => typeof value === 'string' && value.trim().length > 0)
     .join(' ')
     .trim();
@@ -199,8 +215,13 @@ function toOwnerLabel(owner: any, fallbackId: string) {
     return fullName;
   }
 
-  if (typeof owner?.email === 'string' && owner.email.trim()) {
-    return owner.email.trim();
+  if (typeof properties?.hs_name === 'string' && properties.hs_name.trim()) {
+    return properties.hs_name.trim();
+  }
+
+  const email = owner?.email || properties?.email;
+  if (typeof email === 'string' && email.trim()) {
+    return email.trim();
   }
 
   return `Owner ${fallbackId}`;
@@ -231,7 +252,16 @@ function ownerKeyCandidates(value: unknown) {
 }
 
 function ownerLookupKeys(owner: any) {
-  const rawKeys = [owner?.id, owner?.ownerId, owner?.userId, owner?.userIdIncludingInactive];
+  const properties = owner?.properties || {};
+  const rawKeys = [
+    owner?.id,
+    owner?.ownerId,
+    owner?.userId,
+    owner?.userIdIncludingInactive,
+    owner?.email,
+    properties?.hs_internal_user_id,
+    properties?.email,
+  ];
 
   return Array.from(
     new Set(
@@ -262,11 +292,23 @@ async function fetchOwnerLabelById(
   ownerId: string,
   fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
 ) {
+  const crmUserProperties = [
+    'firstname',
+    'lastname',
+    'email',
+    'hs_name',
+    'hs_given_name',
+    'hs_family_name',
+    'hs_internal_user_id',
+  ].join(',');
+
   const candidates = [
     `/crm/v3/owners/${ownerId}`,
     `/crm/v3/owners/${ownerId}?idProperty=userId`,
     `/crm/v3/owners/${ownerId}?idProperty=userIdIncludingInactive`,
     `/settings/v3/users/${ownerId}`,
+    `/crm/v3/objects/users/${ownerId}?properties=${crmUserProperties}`,
+    `/crm/v3/objects/users/${ownerId}?idProperty=hs_internal_user_id&properties=${crmUserProperties}`,
   ];
 
   for (const path of candidates) {
@@ -319,6 +361,71 @@ async function fetchUserLabels(
       }
 
       const data = await fetchWithRefresh(`/settings/v3/users/?${params.toString()}`);
+      const results = Array.isArray(data?.results) ? data.results : [];
+      addUsersToMap(results);
+
+      const nextAfter = data?.paging?.next?.after;
+      if (!nextAfter) {
+        break;
+      }
+
+      after = String(nextAfter);
+      page += 1;
+    }
+  } catch (error) {
+    if (error instanceof HubSpotApiError && error.status === 403) {
+      missingScope = true;
+    }
+  }
+
+  return {
+    labelsByAnyUserKey,
+    missingScope,
+  };
+}
+
+async function fetchCrmUserLabels(
+  fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
+) {
+  const labelsByAnyUserKey: Record<string, string> = {};
+  let missingScope = false;
+
+  const addUsersToMap = (users: any[]) => {
+    users.forEach((user: any) => {
+      const fallbackId = normalizeOwnerKey(user?.id) || 'unknown';
+      const label = toOwnerLabel(user, fallbackId);
+
+      ownerLookupKeys(user).forEach((key) => {
+        labelsByAnyUserKey[key] = label;
+      });
+    });
+  };
+
+  const properties = [
+    'firstname',
+    'lastname',
+    'email',
+    'hs_name',
+    'hs_given_name',
+    'hs_family_name',
+    'hs_internal_user_id',
+  ].join(',');
+
+  try {
+    let after: string | undefined;
+    let page = 0;
+
+    while (page < MAX_CRM_USER_PAGES) {
+      const params = new URLSearchParams({
+        limit: String(CRM_USER_PAGE_LIMIT),
+        properties,
+      });
+
+      if (after) {
+        params.set('after', after);
+      }
+
+      const data = await fetchWithRefresh(`/crm/v3/objects/users/?${params.toString()}`);
       const results = Array.isArray(data?.results) ? data.results : [];
       addUsersToMap(results);
 
@@ -691,6 +798,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // no-op
     }
 
+    try {
+      const crmUserLookup = await fetchCrmUserLabels(fetchWithRefresh);
+      ownerLabelsByKey = {
+        ...crmUserLookup.labelsByAnyUserKey,
+        ...ownerLabelsByKey,
+      };
+      ownerReconnectRequired = ownerReconnectRequired || crmUserLookup.missingScope;
+    } catch {
+      // no-op
+    }
+
     const ownerNameById: Record<string, string> = {};
     await Promise.all(
       ownerIds.map(async (id) => {
@@ -799,7 +917,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ownerReconnectUrl: ownerReconnectRequired ? '/api/oauth/start' : undefined,
       ownerWarning:
         ownerReconnectRequired && ownerIds.length > 0
-            ? 'Pro načtení jmen ownerů přidejte do HubSpot app scopes oprávnění crm.objects.owners.read nebo settings.users.read a potom proveďte reconnect.'
+          ? 'Pro načtení jmen ownerů přidejte do HubSpot app scopes oprávnění crm.objects.owners.read, settings.users.read nebo crm.objects.users.read a potom proveďte reconnect.'
           : undefined,
     };
 
