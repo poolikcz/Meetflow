@@ -107,10 +107,6 @@ const CALENDAR_HEADER_TOOLBAR = {
 
 interface CalendarPaneProps {
   visibleEvents: CalendarEvent[];
-  ownerWarning: string | null;
-  ownerReconnectUrl: string | null;
-  ownerReconnectTitle: string;
-  reconnectHubSpot: string;
   noResultsTitle: string;
   noResultsDescription: string;
   calendarLocale: string;
@@ -120,10 +116,6 @@ interface CalendarPaneProps {
 
 const CalendarPane = memo(function CalendarPane({
   visibleEvents,
-  ownerWarning,
-  ownerReconnectUrl,
-  ownerReconnectTitle,
-  reconnectHubSpot,
   noResultsTitle,
   noResultsDescription,
   calendarLocale,
@@ -141,19 +133,6 @@ const CalendarPane = memo(function CalendarPane({
 
   return (
     <div className="min-w-0 flex-1 space-y-4">
-      {ownerWarning && ownerReconnectUrl && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>{ownerReconnectTitle}</AlertTitle>
-          <AlertDescription className="flex flex-wrap items-center gap-3">
-            <span>{ownerWarning}</span>
-            <Button asChild size="sm" variant="outline">
-              <a href={ownerReconnectUrl}>{reconnectHubSpot}</a>
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
       {visibleEvents.length === 0 && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -224,8 +203,6 @@ const CalendarView = () => {
   const [selectedEvent, setSelectedEvent] = useState<SelectedEventDetail | null>(null);
   const [isFilterVisible, setIsFilterVisible] = useState(true);
   const [isDetailVisible, setIsDetailVisible] = useState(true);
-  const [ownerWarning, setOwnerWarning] = useState<string | null>(null);
-  const [ownerReconnectUrl, setOwnerReconnectUrl] = useState<string | null>(null);
   const { settings } = useSettingsContext();
   const t = getTranslations(settings.language);
 
@@ -234,8 +211,6 @@ const CalendarView = () => {
       setLoading(true);
       setError(null);
       setAuthUrl(null);
-      setOwnerWarning(null);
-      setOwnerReconnectUrl(null);
 
       try {
         const response = await fetch('/api/events?type=all');
@@ -262,8 +237,6 @@ const CalendarView = () => {
 
         setEvents(eventList);
         setOwners(ownerList);
-        setOwnerWarning(data.ownerWarning || null);
-        setOwnerReconnectUrl(data.ownerReconnectUrl || null);
 
         // Initialize selectedOwners state with all owners enabled
         const ownerState: Record<string, boolean> = {};
@@ -431,12 +404,7 @@ const CalendarView = () => {
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>{t.disconnectedTitle}</AlertTitle>
-        <AlertDescription className="flex flex-wrap items-center gap-3">
-          <span>{error || t.disconnectedDescription}</span>
-          <Button asChild size="sm" variant="outline">
-            <a href={authUrl}>{t.reconnectHubSpot}</a>
-          </Button>
-        </AlertDescription>
+        <AlertDescription>{error || t.disconnectedDescription}</AlertDescription>
       </Alert>
     );
   }
@@ -558,10 +526,6 @@ const CalendarView = () => {
 
         <CalendarPane
           visibleEvents={visibleEvents}
-          ownerWarning={ownerWarning}
-          ownerReconnectUrl={ownerReconnectUrl}
-          ownerReconnectTitle={t.ownerReconnectTitle}
-          reconnectHubSpot={t.reconnectHubSpot}
           noResultsTitle={t.noResultsTitle}
           noResultsDescription={t.noResultsDescription}
           calendarLocale={calendarLocale}

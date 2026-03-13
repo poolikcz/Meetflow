@@ -91,6 +91,12 @@ export function SettingsPopover() {
               </Button>
             </div>
           </div>
+
+          <Separator />
+
+          <Button asChild variant="outline" className="w-full">
+            <a href="/api/oauth/start">{t.reconnectHubSpot}</a>
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

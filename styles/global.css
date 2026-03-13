@@ -65,8 +65,20 @@
     --fc-list-event-hover-bg-color: hsl(var(--accent));
   }
 
+  .dark .fc {
+    --fc-border-color: hsl(217 32% 24%);
+    --fc-page-bg-color: hsl(222 47% 9%);
+    --fc-neutral-bg-color: hsl(217 33% 16%);
+    --fc-neutral-text-color: hsl(var(--muted-foreground));
+    --fc-list-event-hover-bg-color: hsl(217 33% 18%);
+  }
+
   .fc .fc-toolbar-title {
     @apply text-lg font-semibold;
+  }
+
+  .dark .fc .fc-toolbar-title {
+    color: hsl(var(--muted-foreground));
   }
 
   .fc .fc-button {
@@ -91,5 +103,20 @@
   .fc .fc-col-header-cell-cushion,
   .fc .fc-daygrid-day-number {
     @apply text-foreground;
+  }
+
+  .dark .fc .fc-col-header-cell-cushion,
+  .dark .fc .fc-daygrid-day-number,
+  .dark .fc .fc-timegrid-axis-cushion,
+  .dark .fc .fc-timegrid-slot-label-cushion,
+  .dark .fc .fc-list-day-text,
+  .dark .fc .fc-list-day-side-text,
+  .dark .fc .fc-list-event-time,
+  .dark .fc .fc-list-event-title {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .dark .fc .fc-day-today {
+    background-color: hsl(217 33% 16% / 0.55) !important;
   }
 }
