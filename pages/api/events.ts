@@ -4,6 +4,7 @@ import { getAuthContext, getOAuthSettings, refreshAccessToken, setAuthCookies } 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
 const PAGE_LIMIT = '100';
 const MAX_PAGES_PER_TYPE = 20;
+const ASSOCIATION_PAGE_LIMIT = 100;
 
 interface CalendarOwner {
   id: string;
@@ -16,6 +17,59 @@ interface CalendarEventResponse {
 }
 
 type ActivityType = 'meetings' | 'calls' | 'tasks';
+type SourceObjectType = 'companies' | 'contacts' | 'deals' | 'tickets';
+
+const SOURCE_OBJECT_TYPES: SourceObjectType[] = ['companies', 'contacts', 'deals', 'tickets'];
+
+const SOURCE_OBJECT_CONFIG: Record<
+  SourceObjectType,
+  {
+    properties: string[];
+    toLabel: (properties: any, id: string) => string;
+  }
+> = {
+  companies: {
+    properties: ['name'],
+    toLabel: (properties, id) => {
+      const value = properties?.name;
+      return typeof value === 'string' && value.trim() ? value.trim() : `Company ${id}`;
+    },
+  },
+  contacts: {
+    properties: ['firstname', 'lastname', 'email'],
+    toLabel: (properties, id) => {
+      const fullName = [properties?.firstname, properties?.lastname]
+        .filter((value) => typeof value === 'string' && value.trim())
+        .join(' ')
+        .trim();
+
+      if (fullName) {
+        return fullName;
+      }
+
+      const email = properties?.email;
+      if (typeof email === 'string' && email.trim()) {
+        return email.trim();
+      }
+
+      return `Contact ${id}`;
+    },
+  },
+  deals: {
+    properties: ['dealname'],
+    toLabel: (properties, id) => {
+      const value = properties?.dealname;
+      return typeof value === 'string' && value.trim() ? value.trim() : `Deal ${id}`;
+    },
+  },
+  tickets: {
+    properties: ['subject'],
+    toLabel: (properties, id) => {
+      const value = properties?.subject;
+      return typeof value === 'string' && value.trim() ? value.trim() : `Ticket ${id}`;
+    },
+  },
+};
 
 const OBJECT_CONFIG: Record<
   ActivityType,
@@ -51,12 +105,20 @@ class HubSpotApiError extends Error {
   }
 }
 
-async function fetchObjects(path: string, token: string) {
+async function fetchObjects(path: string, token: string, init?: RequestInit) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+
+  if (init?.headers) {
+    Object.assign(headers, init.headers as Record<string, string>);
+  }
+
   const resp = await fetch(`${HUBSPOT_BASE}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    method: init?.method || 'GET',
+    body: init?.body,
+    headers,
   });
   const payload = await resp.json().catch(() => null);
 
@@ -104,6 +166,78 @@ function parseHubSpotDate(value: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function toOwnerLabel(owner: any, fallbackId: string) {
+  const fullName = [owner?.firstName, owner?.lastName]
+    .filter((value) => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .trim();
+
+  if (fullName) {
+    return fullName;
+  }
+
+  if (typeof owner?.email === 'string' && owner.email.trim()) {
+    return owner.email.trim();
+  }
+
+  return `Owner ${fallbackId}`;
+}
+
+function getAssociatedIds(associations: any, objectType: SourceObjectType) {
+  const results = associations?.[objectType]?.results;
+  if (!Array.isArray(results)) {
+    return [] as string[];
+  }
+
+  return results
+    .map((item) => item?.id)
+    .filter((id) => id !== undefined && id !== null)
+    .map((id) => String(id));
+}
+
+function chunkArray<T>(values: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+async function fetchSourceLabels(
+  objectType: SourceObjectType,
+  ids: string[],
+  fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
+) {
+  const labelsById: Record<string, string> = {};
+  const config = SOURCE_OBJECT_CONFIG[objectType];
+  const idChunks = chunkArray(ids, ASSOCIATION_PAGE_LIMIT);
+
+  for (const chunk of idChunks) {
+    const payload = {
+      properties: config.properties,
+      inputs: chunk.map((id) => ({ id })),
+    };
+
+    const data = await fetchWithRefresh(`/crm/v3/objects/${objectType}/batch/read`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const results = Array.isArray(data?.results) ? data.results : [];
+    results.forEach((item: any) => {
+      const id = String(item?.id || '');
+      if (!id) {
+        return;
+      }
+      labelsById[id] = config.toLabel(item?.properties || {}, id);
+    });
+  }
+
+  return labelsById;
 }
 
 function toCalendarEvents(results: any[], type: ActivityType, portalId?: string) {
@@ -200,9 +334,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allEvents: any[] = [];
     const warnings: string[] = [];
 
-    const fetchWithRefresh = async (path: string) => {
+    const fetchWithRefresh = async (path: string, init?: RequestInit) => {
       try {
-        return await fetchObjects(path, token);
+        return await fetchObjects(path, token, init);
       } catch (err) {
         if (
           err instanceof HubSpotApiError &&
@@ -216,7 +350,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (refreshed.hub_id) {
             portal = String(refreshed.hub_id);
           }
-          return fetchObjects(path, token);
+          return fetchObjects(path, token, init);
         }
 
         throw err;
@@ -234,6 +368,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             archived: 'false',
             limit: PAGE_LIMIT,
             properties: config.properties.join(','),
+            associations: SOURCE_OBJECT_TYPES.join(','),
           });
           if (after) {
             params.set('after', after);
@@ -281,9 +416,97 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    const owners: CalendarOwner[] = Array.from(uniqueOwnerIds).map((id) => ({
+    const ownerIds = Array.from(uniqueOwnerIds);
+    const ownerNameById: Record<string, string> = {};
+
+    await Promise.all(
+      ownerIds.map(async (id) => {
+        try {
+          const owner = await fetchWithRefresh(`/crm/v3/owners/${id}`);
+          ownerNameById[id] = toOwnerLabel(owner, id);
+        } catch {
+          ownerNameById[id] = `Owner ${id}`;
+        }
+      })
+    );
+
+    allEvents.forEach((event) => {
+      const ownerId = event.extendedProps?.ownerId;
+      if (ownerId) {
+        event.extendedProps.ownerName = ownerNameById[ownerId] || `Owner ${ownerId}`;
+      }
+    });
+
+    const sourceIdsByType: Record<SourceObjectType, Set<string>> = {
+      companies: new Set<string>(),
+      contacts: new Set<string>(),
+      deals: new Set<string>(),
+      tickets: new Set<string>(),
+    };
+
+    allEvents.forEach((event) => {
+      const associations = event.extendedProps?.associations;
+      SOURCE_OBJECT_TYPES.forEach((objectType) => {
+        const ids = getAssociatedIds(associations, objectType);
+        ids.forEach((id) => sourceIdsByType[objectType].add(id));
+      });
+    });
+
+    const sourceLabelsByType: Record<SourceObjectType, Record<string, string>> = {
+      companies: {},
+      contacts: {},
+      deals: {},
+      tickets: {},
+    };
+
+    await Promise.all(
+      SOURCE_OBJECT_TYPES.map(async (objectType) => {
+        const ids = Array.from(sourceIdsByType[objectType]);
+        if (!ids.length) {
+          return;
+        }
+
+        try {
+          sourceLabelsByType[objectType] = await fetchSourceLabels(
+            objectType,
+            ids,
+            fetchWithRefresh
+          );
+        } catch {
+          sourceLabelsByType[objectType] = {};
+        }
+      })
+    );
+
+    allEvents.forEach((event) => {
+      const associations = event.extendedProps?.associations;
+      let sourceLabel: string | undefined;
+
+      for (const objectType of SOURCE_OBJECT_TYPES) {
+        const ids = getAssociatedIds(associations, objectType);
+        const firstId = ids[0];
+        if (!firstId) {
+          continue;
+        }
+
+        const label = sourceLabelsByType[objectType]?.[firstId];
+        sourceLabel = label || sourceLabel;
+        if (label) {
+          break;
+        }
+      }
+
+      if (sourceLabel) {
+        event.extendedProps.sourceLabel = sourceLabel;
+        if (typeof event.title === 'string' && !event.title.startsWith(`${sourceLabel} - `)) {
+          event.title = `${sourceLabel} - ${event.title}`;
+        }
+      }
+    });
+
+    const owners: CalendarOwner[] = ownerIds.map((id) => ({
       id,
-      label: `Owner ${id}`,
+      label: ownerNameById[id] || `Owner ${id}`,
     }));
 
     const response: CalendarEventResponse = {

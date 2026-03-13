@@ -35,6 +35,7 @@ interface SelectedEventDetail {
   url?: string;
   activityType?: ActivityType;
   ownerId?: string;
+  ownerName?: string;
   description?: string;
 }
 
@@ -153,6 +154,54 @@ const CalendarView = () => {
     return option?.label || type;
   };
 
+  const getOwnerLabel = (ownerId?: string, ownerName?: string) => {
+    if (ownerName) {
+      return ownerName;
+    }
+
+    if (!ownerId) {
+      return '-';
+    }
+
+    const owner = owners.find((item) => item.id === ownerId);
+    return owner?.label || `Owner ${ownerId}`;
+  };
+
+  const sanitizeHtml = (input?: string) => {
+    if (!input) {
+      return '';
+    }
+
+    if (typeof window === 'undefined') {
+      return input;
+    }
+
+    const parser = new DOMParser();
+    const documentNode = parser.parseFromString(input, 'text/html');
+
+    documentNode
+      .querySelectorAll('script, style, iframe, object, embed, link, meta')
+      .forEach((node) => node.remove());
+
+    documentNode.querySelectorAll('*').forEach((element) => {
+      Array.from(element.attributes).forEach((attribute) => {
+        const name = attribute.name.toLowerCase();
+        const value = attribute.value.trim().toLowerCase();
+
+        if (name.startsWith('on')) {
+          element.removeAttribute(attribute.name);
+          return;
+        }
+
+        if ((name === 'href' || name === 'src') && value.startsWith('javascript:')) {
+          element.removeAttribute(attribute.name);
+        }
+      });
+    });
+
+    return documentNode.body.innerHTML;
+  };
+
   if (loading) {
     return <p>Loading…</p>;
   }
@@ -236,6 +285,7 @@ const CalendarView = () => {
                   url: info.event.url,
                   activityType: extendedProps.activityType as ActivityType | undefined,
                   ownerId: extendedProps.ownerId,
+                  ownerName: extendedProps.ownerName,
                   description,
                 });
               }}
@@ -255,12 +305,19 @@ const CalendarView = () => {
               <p><strong>Typ:</strong> {getTypeLabel(selectedEvent.activityType)}</p>
               <p><strong>Začátek:</strong> {formatDate(selectedEvent.start)}</p>
               <p><strong>Konec:</strong> {formatDate(selectedEvent.end)}</p>
-              {selectedEvent.ownerId && <p><strong>Owner ID:</strong> {selectedEvent.ownerId}</p>}
+              <p>
+                <strong>Owner:</strong>{' '}
+                {getOwnerLabel(selectedEvent.ownerId, selectedEvent.ownerName)}
+              </p>
 
               {selectedEvent.description && (
-                <p style={{ whiteSpace: 'pre-wrap' }}>
-                  <strong>Poznámka:</strong> {selectedEvent.description}
-                </p>
+                <div>
+                  <strong>Poznámka:</strong>
+                  <div
+                    style={{ marginTop: 6 }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedEvent.description) }}
+                  />
+                </div>
               )}
 
               {selectedEvent.url && (
