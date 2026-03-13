@@ -256,6 +256,7 @@ const CalendarPane = memo(function CalendarPane({
               height="100%"
               expandRows
               scrollTimeReset={false}
+              displayEventTime={false}
               eventOrder="start,title"
               eventMinHeight={18}
               eventTimeFormat={timeFormat}
