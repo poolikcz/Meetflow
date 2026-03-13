@@ -12,6 +12,12 @@ const FILTER_OPTIONS: Array<{ key: ActivityType; label: string }> = [
   { key: 'tasks', label: 'Úkoly' },
 ];
 
+const TYPE_COLORS: Record<ActivityType, string> = {
+  meetings: 'blue',
+  calls: 'green',
+  tasks: 'gold',
+};
+
 interface CalendarEvent {
   id: string;
   title: string;
@@ -231,6 +237,15 @@ const CalendarView = () => {
               type="checkbox"
               checked={selectedTypes[option.key]}
               onChange={() => toggleType(option.key)}
+            />
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: TYPE_COLORS[option.key],
+                display: 'inline-block',
+              }}
             />
             {option.label}
           </label>

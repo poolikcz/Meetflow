@@ -5,6 +5,8 @@ const HUBSPOT_BASE = 'https://api.hubapi.com';
 const PAGE_LIMIT = '100';
 const MAX_PAGES_PER_TYPE = 20;
 const ASSOCIATION_PAGE_LIMIT = 100;
+const OWNER_PAGE_LIMIT = 500;
+const MAX_OWNER_PAGES = 20;
 
 interface CalendarOwner {
   id: string;
@@ -185,6 +187,55 @@ function toOwnerLabel(owner: any, fallbackId: string) {
   return `Owner ${fallbackId}`;
 }
 
+function ownerLookupKeys(owner: any) {
+  return [owner?.id, owner?.userId, owner?.userIdIncludingInactive]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => String(value));
+}
+
+async function fetchOwnerLabels(
+  fetchWithRefresh: (path: string, init?: RequestInit) => Promise<any>
+) {
+  const labelsByAnyOwnerKey: Record<string, string> = {};
+
+  for (const archived of ['false', 'true']) {
+    let after: string | undefined;
+    let page = 0;
+
+    while (page < MAX_OWNER_PAGES) {
+      const params = new URLSearchParams({
+        archived,
+        limit: String(OWNER_PAGE_LIMIT),
+      });
+
+      if (after) {
+        params.set('after', after);
+      }
+
+      const data = await fetchWithRefresh(`/crm/v3/owners?${params.toString()}`);
+      const results = Array.isArray(data?.results) ? data.results : [];
+
+      results.forEach((owner: any) => {
+        const fallbackId = String(owner?.id || '');
+        const label = toOwnerLabel(owner, fallbackId || 'unknown');
+        ownerLookupKeys(owner).forEach((key) => {
+          labelsByAnyOwnerKey[key] = label;
+        });
+      });
+
+      const nextAfter = data?.paging?.next?.after;
+      if (!nextAfter) {
+        break;
+      }
+
+      after = String(nextAfter);
+      page += 1;
+    }
+  }
+
+  return labelsByAnyOwnerKey;
+}
+
 function getAssociatedIds(associations: any, objectType: SourceObjectType) {
   const results = associations?.[objectType]?.results;
   if (!Array.isArray(results)) {
@@ -269,7 +320,7 @@ function toCalendarEvents(results: any[], type: ActivityType, portalId?: string)
         color = 'green';
         break;
       case 'tasks':
-        color = 'orange';
+        color = 'gold';
         break;
       default:
         color = '';
@@ -417,18 +468,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const ownerIds = Array.from(uniqueOwnerIds);
-    const ownerNameById: Record<string, string> = {};
+    let ownerLabelsByKey: Record<string, string> = {};
 
-    await Promise.all(
-      ownerIds.map(async (id) => {
-        try {
-          const owner = await fetchWithRefresh(`/crm/v3/owners/${id}`);
-          ownerNameById[id] = toOwnerLabel(owner, id);
-        } catch {
-          ownerNameById[id] = `Owner ${id}`;
-        }
-      })
-    );
+    try {
+      ownerLabelsByKey = await fetchOwnerLabels(fetchWithRefresh);
+    } catch {
+      ownerLabelsByKey = {};
+    }
+
+    const ownerNameById: Record<string, string> = {};
+    ownerIds.forEach((id) => {
+      ownerNameById[id] = ownerLabelsByKey[id] || `Owner ${id}`;
+    });
 
     allEvents.forEach((event) => {
       const ownerId = event.extendedProps?.ownerId;
