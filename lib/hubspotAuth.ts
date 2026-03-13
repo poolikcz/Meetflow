@@ -16,6 +16,12 @@ const DEFAULT_HUBSPOT_SCOPES = [
   'crm.objects.tasks.read',
 ];
 
+const DEFAULT_HUBSPOT_OPTIONAL_SCOPES = [
+  'crm.objects.owners.read',
+  'settings.users.read',
+  'crm.objects.users.read',
+];
+
 type CookieOptions = {
   maxAge?: number;
   path?: string;
@@ -119,7 +125,7 @@ export function getOAuthSettings(req: NextApiRequest): HubSpotOAuthSettings {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || getRequestBaseUrl(req);
   const redirectUri = process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/oauth/callback`;
   const scopeSource = process.env.HUBSPOT_OAUTH_SCOPES || DEFAULT_HUBSPOT_SCOPES.join(' ');
-  const optionalScopeSource = process.env.HUBSPOT_OPTIONAL_SCOPES || '';
+  const optionalScopeSource = process.env.HUBSPOT_OPTIONAL_SCOPES || DEFAULT_HUBSPOT_OPTIONAL_SCOPES.join(' ');
   const normalizedScopeSource = scopeSource.trim().replace(/^['"]|['"]$/g, '');
   const normalizedOptionalScopeSource = optionalScopeSource.trim().replace(/^['"]|['"]$/g, '');
   const scopes = Array.from(

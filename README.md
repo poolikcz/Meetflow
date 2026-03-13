@@ -19,6 +19,7 @@ This repository contains a Next.js + FullCalendar application designed to be use
    HUBSPOT_OPTIONAL_SCOPES="crm.objects.owners.read settings.users.read crm.objects.users.read"
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
+   If `HUBSPOT_OPTIONAL_SCOPES` is omitted, the app requests `crm.objects.owners.read settings.users.read crm.objects.users.read` by default.
    Optional fallback for local-only testing without OAuth:
    ```bash
    HUBSPOT_TOKEN=your_private_app_token
@@ -37,7 +38,7 @@ Deploy to Vercel or any platform that supports Next.js and set these environment
 - `HUBSPOT_CLIENT_SECRET`
 - `HUBSPOT_REDIRECT_URI` (e.g. `https://your-domain.vercel.app/api/oauth/callback`)
 - `HUBSPOT_OAUTH_SCOPES`
-- `HUBSPOT_OPTIONAL_SCOPES` (for example `crm.objects.owners.read settings.users.read crm.objects.users.read`)
+- `HUBSPOT_OPTIONAL_SCOPES` (optional override; defaults to `crm.objects.owners.read settings.users.read crm.objects.users.read`)
 - `NEXT_PUBLIC_APP_URL`
 
 ## HubSpot Integration
