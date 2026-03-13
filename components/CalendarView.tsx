@@ -105,6 +105,8 @@ const CALENDAR_HEADER_TOOLBAR = {
   right: 'dayGridMonth,timeGridWeek,timeGridDay',
 } as const;
 
+const VISUAL_STACK_MINUTES = 5;
+
 interface CalendarPaneProps {
   visibleEvents: CalendarEvent[];
   noResultsTitle: string;
@@ -175,17 +177,13 @@ const CalendarPane = memo(function CalendarPane({
   );
 
   const renderedEvents = useMemo(() => {
-    const useListStyleEvents = currentView === 'timeGridWeek' || currentView === 'timeGridDay';
+    const useStackedTimedEvents = currentView === 'timeGridWeek' || currentView === 'timeGridDay';
 
-    if (!useListStyleEvents) {
+    if (!useStackedTimedEvents) {
       return visibleEvents;
     }
 
-    const labelFormatter = new Intl.DateTimeFormat(calendarLocale, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: calendarUses12h,
-    });
+    const seenByStartKey = new Map<string, number>();
 
     return visibleEvents.map((event) => {
       const activityType = event.extendedProps?.activityType as ActivityType | undefined;
@@ -195,24 +193,45 @@ const CalendarPane = memo(function CalendarPane({
       }
 
       const startDate = event.start ? new Date(event.start) : null;
-      const timePrefix =
-        startDate && !Number.isNaN(startDate.getTime())
-          ? `${labelFormatter.format(startDate)} `
-          : '';
+      if (!startDate || Number.isNaN(startDate.getTime())) {
+        return event;
+      }
+
+      const dayKey = `${startDate.getFullYear()}-${startDate.getMonth()}-${startDate.getDate()}`;
+      const startKey = `${dayKey}-${startDate.getHours()}-${startDate.getMinutes()}`;
+      const stackIndex = seenByStartKey.get(startKey) || 0;
+      seenByStartKey.set(startKey, stackIndex + 1);
+
+      const visualStart = new Date(startDate);
+      visualStart.setMinutes(visualStart.getMinutes() + stackIndex * VISUAL_STACK_MINUTES);
+
+      const originalEnd = event.end ? new Date(event.end) : null;
+      const visualEnd = new Date(visualStart);
+      const fallbackDurationMinutes = VISUAL_STACK_MINUTES;
+
+      if (originalEnd && !Number.isNaN(originalEnd.getTime()) && originalEnd > startDate) {
+        const durationMinutes = Math.max(
+          fallbackDurationMinutes,
+          Math.round((originalEnd.getTime() - startDate.getTime()) / 60000)
+        );
+        visualEnd.setMinutes(visualEnd.getMinutes() + durationMinutes);
+      } else {
+        visualEnd.setMinutes(visualEnd.getMinutes() + fallbackDurationMinutes);
+      }
 
       return {
         ...event,
-        title: `${timePrefix}${event.title}`,
-        allDay: true,
-        end: undefined,
-        display: 'list-item' as const,
+        start: visualStart.toISOString(),
+        end: visualEnd.toISOString(),
         extendedProps: {
           ...event.extendedProps,
           originalTitle: event.title,
+          originalStart: event.start,
+          originalEnd: event.end,
         },
       };
     });
-  }, [calendarLocale, calendarUses12h, currentView, visibleEvents]);
+  }, [currentView, visibleEvents]);
 
   return (
     <div className="min-w-0 flex-1 space-y-4">
@@ -238,6 +257,7 @@ const CalendarPane = memo(function CalendarPane({
               expandRows
               scrollTimeReset={false}
               eventOrder="start,title"
+              eventMinHeight={18}
               eventTimeFormat={timeFormat}
               slotLabelFormat={timeFormat}
               headerToolbar={CALENDAR_HEADER_TOOLBAR}
@@ -258,8 +278,8 @@ const CalendarPane = memo(function CalendarPane({
                 onEventClick({
                   id: info.event.id,
                   title: extendedProps.originalTitle || info.event.title,
-                  start: info.event.start?.toISOString() || '',
-                  end: info.event.end?.toISOString(),
+                  start: extendedProps.originalStart || info.event.start?.toISOString() || '',
+                  end: extendedProps.originalEnd || info.event.end?.toISOString(),
                   url: info.event.url,
                   activityType: extendedProps.activityType as ActivityType | undefined,
                   ownerId: extendedProps.ownerId,
