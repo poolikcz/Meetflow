@@ -2,9 +2,9 @@ import React from "react";
 import { EmptyState, Link, Text } from "@hubspot/ui-extensions";
 import { hubspot } from "@hubspot/ui-extensions";
 
-hubspot.extend<'crm.record.tab'>(() => <Extension />);
+hubspot.extend<'crm.record.sidebar'>(() => <SidebarCard />);
 
-const Extension = () => {
+const SidebarCard = () => {
   const calendarUrl = 'https://meetflow-woad.vercel.app';
 
   return (

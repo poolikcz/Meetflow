@@ -10,13 +10,13 @@ const SettingsPage = () => {
   return (
     <>
       <EmptyState
-        title="Meetflow setup"
+        title="Meetflow access"
         layout="horizontal"
         imageName='building'
       >
         <Text>
-          Configure OAuth callback URLs and required scopes before publishing.
-          <Link href={setupGuideUrl}> Open setup guide</Link>
+          Open the calendar app directly from HubSpot settings.
+          <Link href={setupGuideUrl}> Open Meetflow</Link>
         </Text>
       </EmptyState>
     </>
