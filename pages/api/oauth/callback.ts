@@ -28,12 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const settings = getOAuthSettings(req);
     const cookieState = getAuthContext(req).state;
 
-    // Validate state when either the URL contains state or the session has a
-    // state cookie – this preserves CSRF protection for the normal /oauth/start
-    // flow while allowing direct installs via the HubSpot-provided install URL
-    // (which never sends a state parameter).
-    const stateRequired = !!incomingState || !!cookieState;
-    if (stateRequired && (!cookieState || cookieState !== incomingState)) {
+    // Only validate state when our own /oauth/start flow set a state cookie.
+    // This preserves CSRF protection for the normal flow while allowing direct
+    // installs via shareable HubSpot install URLs (no cookie → no state check).
+    if (cookieState && cookieState !== incomingState) {
       res.status(400).json({ error: 'Invalid OAuth state' });
       return;
     }
