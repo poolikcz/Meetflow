@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -97,6 +97,118 @@ interface SelectedEventDetail {
   description?: string;
 }
 
+const CALENDAR_LOCALES = [csLocale, deLocale, esLocale];
+
+const CALENDAR_HEADER_TOOLBAR = {
+  left: 'prev,next today',
+  center: 'title',
+  right: 'dayGridMonth,timeGridWeek,timeGridDay',
+} as const;
+
+interface CalendarPaneProps {
+  visibleEvents: CalendarEvent[];
+  ownerWarning: string | null;
+  ownerReconnectUrl: string | null;
+  ownerReconnectTitle: string;
+  reconnectHubSpot: string;
+  noResultsTitle: string;
+  noResultsDescription: string;
+  calendarLocale: string;
+  calendarUses12h: boolean;
+  onEventClick: (detail: SelectedEventDetail) => void;
+}
+
+const CalendarPane = memo(function CalendarPane({
+  visibleEvents,
+  ownerWarning,
+  ownerReconnectUrl,
+  ownerReconnectTitle,
+  reconnectHubSpot,
+  noResultsTitle,
+  noResultsDescription,
+  calendarLocale,
+  calendarUses12h,
+  onEventClick,
+}: CalendarPaneProps) {
+  const timeFormat = useMemo(
+    () => ({
+      hour: '2-digit' as const,
+      minute: '2-digit' as const,
+      hour12: calendarUses12h,
+    }),
+    [calendarUses12h]
+  );
+
+  return (
+    <div className="min-w-0 flex-1 space-y-4">
+      {ownerWarning && ownerReconnectUrl && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{ownerReconnectTitle}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{ownerWarning}</span>
+            <Button asChild size="sm" variant="outline">
+              <a href={ownerReconnectUrl}>{reconnectHubSpot}</a>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {visibleEvents.length === 0 && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{noResultsTitle}</AlertTitle>
+          <AlertDescription>{noResultsDescription}</AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardContent className="p-2 md:p-3">
+          <div className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
+            <FullCalendar
+              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+              locales={CALENDAR_LOCALES}
+              locale={calendarLocale}
+              initialView="dayGridMonth"
+              events={visibleEvents}
+              height="100%"
+              expandRows
+              scrollTimeReset={false}
+              eventTimeFormat={timeFormat}
+              slotLabelFormat={timeFormat}
+              headerToolbar={CALENDAR_HEADER_TOOLBAR}
+              eventClick={(info) => {
+                info.jsEvent.preventDefault();
+
+                const extendedProps = info.event.extendedProps || {};
+                const properties = extendedProps.properties || {};
+                const description =
+                  properties.hs_meeting_body ||
+                  properties.hs_call_body ||
+                  properties.hs_task_body ||
+                  undefined;
+
+                onEventClick({
+                  id: info.event.id,
+                  title: info.event.title,
+                  start: info.event.start?.toISOString() || '',
+                  end: info.event.end?.toISOString(),
+                  url: info.event.url,
+                  activityType: extendedProps.activityType as ActivityType | undefined,
+                  ownerId: extendedProps.ownerId,
+                  ownerName: extendedProps.ownerName,
+                  sourceLabel: extendedProps.sourceLabel,
+                  description,
+                });
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+});
+
 const CalendarView = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -172,22 +284,25 @@ const CalendarView = () => {
     loadEvents();
   }, [t.loadErrorTitle]);
 
-  const visibleEvents = events.filter((event) => {
-    const type = event.extendedProps?.activityType as ActivityType | undefined;
-    if (!type || !selectedTypes[type]) {
-      return false;
-    }
+  const visibleEvents = useMemo(
+    () =>
+      events.filter((event) => {
+        const type = event.extendedProps?.activityType as ActivityType | undefined;
+        if (!type || !selectedTypes[type]) {
+          return false;
+        }
 
-    // If there are owners, filter by owner. If no owners exist, show all.
-    if (owners.length > 0) {
-      const ownerId = normalizeOwnerKey(event.extendedProps?.ownerId);
-      if (ownerId && !selectedOwners[ownerId]) {
-        return false;
-      }
-    }
+        if (owners.length > 0) {
+          const ownerId = normalizeOwnerKey(event.extendedProps?.ownerId);
+          if (ownerId && !selectedOwners[ownerId]) {
+            return false;
+          }
+        }
 
-    return true;
-  });
+        return true;
+      }),
+    [events, owners.length, selectedOwners, selectedTypes]
+  );
 
   const formatDate = (value?: string) => {
     if (!value) {
@@ -290,6 +405,11 @@ const CalendarView = () => {
         : settings.language === 'en'
           ? 'en-US'
           : 'cs-CZ';
+
+  const handleCalendarEventClick = useCallback((detail: SelectedEventDetail) => {
+    setSelectedEvent(detail);
+    setIsDetailVisible(true);
+  }, []);
 
   if (loading) {
     return (
@@ -436,84 +556,18 @@ const CalendarView = () => {
           </Card>
         )}
 
-        <div className="min-w-0 flex-1 space-y-4">
-          {ownerWarning && ownerReconnectUrl && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{t.ownerReconnectTitle}</AlertTitle>
-              <AlertDescription className="flex flex-wrap items-center gap-3">
-                <span>{ownerWarning}</span>
-                <Button asChild size="sm" variant="outline">
-                  <a href={ownerReconnectUrl}>{t.reconnectHubSpot}</a>
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {visibleEvents.length === 0 && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{t.noResultsTitle}</AlertTitle>
-              <AlertDescription>{t.noResultsDescription}</AlertDescription>
-            </Alert>
-          )}
-
-          <Card>
-            <CardContent className="p-2 md:p-3">
-              <div className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
-                <FullCalendar
-                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                  locales={[csLocale, deLocale, esLocale]}
-                  locale={calendarLocale}
-                  initialView="dayGridMonth"
-                  events={visibleEvents}
-                  height="100%"
-                  expandRows
-                  eventTimeFormat={{
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: calendarUses12h,
-                  }}
-                  slotLabelFormat={{
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: calendarUses12h,
-                  }}
-                  headerToolbar={{
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                  }}
-                  eventClick={(info) => {
-                    info.jsEvent.preventDefault();
-
-                    const extendedProps = info.event.extendedProps || {};
-                    const properties = extendedProps.properties || {};
-                    const description =
-                      properties.hs_meeting_body ||
-                      properties.hs_call_body ||
-                      properties.hs_task_body ||
-                      undefined;
-
-                    setSelectedEvent({
-                      id: info.event.id,
-                      title: info.event.title,
-                      start: info.event.start?.toISOString() || '',
-                      end: info.event.end?.toISOString(),
-                      url: info.event.url,
-                      activityType: extendedProps.activityType as ActivityType | undefined,
-                      ownerId: extendedProps.ownerId,
-                      ownerName: extendedProps.ownerName,
-                      sourceLabel: extendedProps.sourceLabel,
-                      description,
-                    });
-                    setIsDetailVisible(true);
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <CalendarPane
+          visibleEvents={visibleEvents}
+          ownerWarning={ownerWarning}
+          ownerReconnectUrl={ownerReconnectUrl}
+          ownerReconnectTitle={t.ownerReconnectTitle}
+          reconnectHubSpot={t.reconnectHubSpot}
+          noResultsTitle={t.noResultsTitle}
+          noResultsDescription={t.noResultsDescription}
+          calendarLocale={calendarLocale}
+          calendarUses12h={calendarUses12h}
+          onEventClick={handleCalendarEventClick}
+        />
 
         {isDetailVisible && (
           <Card className="h-fit xl:sticky xl:top-6 xl:w-[360px] xl:shrink-0">
