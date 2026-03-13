@@ -15,7 +15,7 @@ export function SettingsPopover() {
           <span className="sr-only">Nastavení</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64">
+      <PopoverContent align="end" className="w-80">
         <div className="space-y-4">
           <p className="text-sm font-semibold">Nastavení zobrazení</p>
 
@@ -25,22 +25,22 @@ export function SettingsPopover() {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Formát data
             </p>
-            <div className="flex gap-1">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 size="sm"
-                className="flex-1"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
                 variant={settings.dateFormat === 'eu' ? 'default' : 'outline'}
                 onClick={() => updateSettings({ dateFormat: 'eu' })}
               >
-                EU (DD.MM.RRRR)
+                EU (DD.MM.YYYY)
               </Button>
               <Button
                 size="sm"
-                className="flex-1"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
                 variant={settings.dateFormat === 'us' ? 'default' : 'outline'}
                 onClick={() => updateSettings({ dateFormat: 'us' })}
               >
-                US (MM/DD)
+                US (MM/DD/YYYY)
               </Button>
             </div>
           </div>
@@ -49,10 +49,10 @@ export function SettingsPopover() {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Formát času
             </p>
-            <div className="flex gap-1">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 size="sm"
-                className="flex-1"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
                 variant={settings.timeFormat === '24h' ? 'default' : 'outline'}
                 onClick={() => updateSettings({ timeFormat: '24h' })}
               >
@@ -60,7 +60,7 @@ export function SettingsPopover() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
                 variant={settings.timeFormat === '12h' ? 'default' : 'outline'}
                 onClick={() => updateSettings({ timeFormat: '12h' })}
               >

@@ -3,6 +3,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import csLocale from '@fullcalendar/core/locales/cs';
 import {
   AlertCircle,
   ExternalLink,
@@ -250,6 +251,9 @@ const CalendarView = () => {
     return documentNode.body.innerHTML;
   };
 
+  const calendarLocale = settings.dateFormat === 'us' ? 'en' : 'cs';
+  const calendarUses12h = settings.timeFormat === '12h';
+
   if (loading) {
     return (
       <Card>
@@ -305,45 +309,31 @@ const CalendarView = () => {
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsFilterVisible((previous) => !previous)}
-        >
-          {isFilterVisible ? (
-            <PanelLeftClose className="mr-2 h-4 w-4" />
-          ) : (
-            <PanelLeftOpen className="mr-2 h-4 w-4" />
-          )}
-          {isFilterVisible ? 'Skrýt filtraci' : 'Zobrazit filtraci'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsDetailVisible((previous) => !previous)}
-        >
-          {isDetailVisible ? (
-            <PanelRightClose className="mr-2 h-4 w-4" />
-          ) : (
-            <PanelRightOpen className="mr-2 h-4 w-4" />
-          )}
-          {isDetailVisible ? 'Skrýt detail' : 'Zobrazit detail'}
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Kliknutím na záznam aktualizujete detail v pravém panelu.
-        </span>
-      </div>
-
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         {isFilterVisible && (
           <Card className="h-fit xl:sticky xl:top-6 xl:w-[300px] xl:shrink-0">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Filter className="h-4 w-4" />
-                Filtrace
-              </CardTitle>
-              <CardDescription>Vyberte, co se má zobrazit v kalendáři.</CardDescription>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Filter className="h-4 w-4" />
+                    Filtrace
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Vyberte, co se má zobrazit v kalendáři.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsFilterVisible(false)}
+                  title="Skrýt filtraci"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                  <span className="sr-only">Skrýt filtraci</span>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
@@ -395,6 +385,23 @@ const CalendarView = () => {
           </Card>
         )}
 
+        {!isFilterVisible && (
+          <Card className="h-fit xl:sticky xl:top-6 xl:w-[52px] xl:shrink-0">
+            <CardContent className="p-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setIsFilterVisible(true)}
+                title="Zobrazit filtraci"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+                <span className="sr-only">Zobrazit filtraci</span>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="min-w-0 flex-1 space-y-4">
           {visibleEvents.length === 0 && (
             <Alert>
@@ -409,10 +416,22 @@ const CalendarView = () => {
               <div className="h-[70vh] min-h-[560px] xl:h-[calc(100vh-170px)] xl:min-h-[720px]">
                 <FullCalendar
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                  locales={[csLocale]}
+                  locale={calendarLocale}
                   initialView="dayGridMonth"
                   events={visibleEvents}
                   height="100%"
                   expandRows
+                  eventTimeFormat={{
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: calendarUses12h,
+                  }}
+                  slotLabelFormat={{
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: calendarUses12h,
+                  }}
                   headerToolbar={{
                     left: 'prev,next today',
                     center: 'title',
@@ -441,6 +460,7 @@ const CalendarView = () => {
                       sourceLabel: extendedProps.sourceLabel,
                       description,
                     });
+                    setIsDetailVisible(true);
                   }}
                 />
               </div>
@@ -451,10 +471,24 @@ const CalendarView = () => {
         {isDetailVisible && (
           <Card className="h-fit xl:sticky xl:top-6 xl:w-[360px] xl:shrink-0">
             <CardHeader>
-              <CardTitle>Detail záznamu</CardTitle>
-              <CardDescription>
-                {selectedEvent?.sourceLabel || 'Klikněte na událost v kalendáři'}
-              </CardDescription>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Detail záznamu</CardTitle>
+                  <CardDescription className="mt-1">
+                    {selectedEvent?.sourceLabel || 'Klikněte na událost v kalendáři'}
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsDetailVisible(false)}
+                  title="Skrýt detail"
+                >
+                  <PanelRightClose className="h-4 w-4" />
+                  <span className="sr-only">Skrýt detail</span>
+                </Button>
+              </div>
             </CardHeader>
             {selectedEvent ? (
               <CardContent className="space-y-5">
