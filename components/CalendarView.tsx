@@ -113,6 +113,7 @@ interface CalendarPaneProps {
   noResultsDescription: string;
   calendarLocale: string;
   calendarUses12h: boolean;
+  showWeekends: boolean;
   layoutSignature: string;
   onEventClick: (detail: SelectedEventDetail) => void;
 }
@@ -123,6 +124,7 @@ const CalendarPane = memo(function CalendarPane({
   noResultsDescription,
   calendarLocale,
   calendarUses12h,
+  showWeekends,
   layoutSignature,
   onEventClick,
 }: CalendarPaneProps) {
@@ -253,6 +255,7 @@ const CalendarPane = memo(function CalendarPane({
               locale={calendarLocale}
               initialView="dayGridMonth"
               events={renderedEvents}
+              weekends={showWeekends}
               height="100%"
               expandRows
               scrollTimeReset={false}
@@ -641,6 +644,7 @@ const CalendarView = () => {
           noResultsDescription={t.noResultsDescription}
           calendarLocale={calendarLocale}
           calendarUses12h={calendarUses12h}
+          showWeekends={settings.showWeekends}
           layoutSignature={layoutSignature}
           onEventClick={handleCalendarEventClick}
         />

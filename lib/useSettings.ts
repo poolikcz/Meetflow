@@ -8,6 +8,7 @@ export interface AppSettings {
   dateFormat: DateFormat;
   timeFormat: TimeFormat;
   language: Language;
+  showWeekends: boolean;
 }
 
 const COOKIE_KEY = 'hubcal_settings';
@@ -17,6 +18,7 @@ const DEFAULTS: AppSettings = {
   dateFormat: 'eu',
   timeFormat: '24h',
   language: 'cs',
+  showWeekends: true,
 };
 
 function readCookie(): AppSettings {
@@ -29,6 +31,7 @@ function readCookie(): AppSettings {
       dateFormat: parsed.dateFormat === 'us' ? 'us' : 'eu',
       timeFormat: parsed.timeFormat === '12h' ? '12h' : '24h',
       language: ['cs', 'en', 'de', 'es'].includes(parsed.language) ? parsed.language : 'cs',
+      showWeekends: parsed.showWeekends !== false,
     };
   } catch {
     return DEFAULTS;

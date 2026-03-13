@@ -92,6 +92,30 @@ export function SettingsPopover() {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t.weekendsLabel}
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              <Button
+                size="sm"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
+                variant={settings.showWeekends ? 'default' : 'outline'}
+                onClick={() => updateSettings({ showWeekends: true })}
+              >
+                {t.showWeekendsLabel}
+              </Button>
+              <Button
+                size="sm"
+                className="h-auto min-h-8 whitespace-normal px-2 py-1 text-center leading-tight"
+                variant={!settings.showWeekends ? 'default' : 'outline'}
+                onClick={() => updateSettings({ showWeekends: false })}
+              >
+                {t.hideWeekendsLabel}
+              </Button>
+            </div>
+          </div>
+
           <Separator />
 
           <Button asChild variant="outline" className="w-full">

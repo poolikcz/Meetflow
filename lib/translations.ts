@@ -8,6 +8,9 @@ export interface TranslationMessages {
   languageLabel: string;
   dateFormatLabel: string;
   timeFormatLabel: string;
+  weekendsLabel: string;
+  showWeekendsLabel: string;
+  hideWeekendsLabel: string;
   themeToggleLabel: string;
   filterTitle: string;
   filterDescription: string;
@@ -52,6 +55,9 @@ const translations: Record<Language, TranslationMessages> = {
     languageLabel: 'Jazyk prostředí',
     dateFormatLabel: 'Formát data',
     timeFormatLabel: 'Formát času',
+    weekendsLabel: 'Víkendové dny',
+    showWeekendsLabel: 'Zobrazit sobotu a neděli',
+    hideWeekendsLabel: 'Skrýt sobotu a neděli',
     themeToggleLabel: 'Přepnout motiv',
     filterTitle: 'Filtrace',
     filterDescription: 'Vyberte, co se má zobrazit v kalendáři.',
@@ -102,6 +108,9 @@ const translations: Record<Language, TranslationMessages> = {
     languageLabel: 'Interface language',
     dateFormatLabel: 'Date format',
     timeFormatLabel: 'Time format',
+    weekendsLabel: 'Weekend days',
+    showWeekendsLabel: 'Show Saturday and Sunday',
+    hideWeekendsLabel: 'Hide Saturday and Sunday',
     themeToggleLabel: 'Toggle theme',
     filterTitle: 'Filters',
     filterDescription: 'Choose what should be shown in the calendar.',
@@ -152,6 +161,9 @@ const translations: Record<Language, TranslationMessages> = {
     languageLabel: 'Sprache',
     dateFormatLabel: 'Datumsformat',
     timeFormatLabel: 'Zeitformat',
+    weekendsLabel: 'Wochenendtage',
+    showWeekendsLabel: 'Samstag und Sonntag anzeigen',
+    hideWeekendsLabel: 'Samstag und Sonntag ausblenden',
     themeToggleLabel: 'Design umschalten',
     filterTitle: 'Filter',
     filterDescription: 'Wählen Sie aus, was im Kalender angezeigt werden soll.',
@@ -202,6 +214,9 @@ const translations: Record<Language, TranslationMessages> = {
     languageLabel: 'Idioma de la interfaz',
     dateFormatLabel: 'Formato de fecha',
     timeFormatLabel: 'Formato de hora',
+    weekendsLabel: 'Días de fin de semana',
+    showWeekendsLabel: 'Mostrar sábado y domingo',
+    hideWeekendsLabel: 'Ocultar sábado y domingo',
     themeToggleLabel: 'Cambiar tema',
     filterTitle: 'Filtros',
     filterDescription: 'Elige qué debe mostrarse en el calendario.',
